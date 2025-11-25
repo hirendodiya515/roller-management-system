@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
   Paper,
@@ -25,6 +25,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import EditIcon from '@mui/icons-material/Edit';
 import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { doc, getDoc, collection, onSnapshot, query, orderBy, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -43,6 +44,7 @@ const GRADIENTS = [
 
 export default function RollerDetails() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [roller, setRoller] = useState(null);
   const [records, setRecords] = useState([]);
   const [openForm, setOpenForm] = useState(false);
@@ -86,12 +88,16 @@ export default function RollerDetails() {
   const handleApproval = async (recordId, isApproved) => {
     if (userRole !== 'Approver' && userRole !== 'Admin') return;
     try {
-      await updateDoc(doc(db, `rollers/${id}/records`, recordId), {
+      const approvalData = {
         status: isApproved ? 'Approved' : 'Rejected',
         approvedBy: currentUser.uid,
         approvedAt: new Date(),
-        remarks: isApproved ? 'Approved via System' : 'Rejected'
-      });
+        approvalInfo: isApproved
+          ? `Approved by ${currentUser.email || currentUser.uid} on ${format(new Date(), 'dd/MM/yyyy HH:mm')}`
+          : `Rejected by ${currentUser.email || currentUser.uid} on ${format(new Date(), 'dd/MM/yyyy HH:mm')}`
+      };
+
+      await updateDoc(doc(db, `rollers/${id}/records`, recordId), approvalData);
     } catch (error) {
       console.error(error);
     }
@@ -114,6 +120,41 @@ export default function RollerDetails() {
     return Object.entries(stats).map(([name, data]) => ({ name, ...data }));
   }, [records]);
 
+  // Calculate Current Status from latest approved record only
+  const currentStatus = useMemo(() => {
+    const approvedRecords = records.filter(r => r.status === 'Approved');
+    if (approvedRecords.length === 0) return { label: 'No Activity', color: '#9E9E9E' };
+
+    const latestApprovedRecord = approvedRecords[0]; // Already sorted by date desc
+    const activityType = latestApprovedRecord.activity;
+
+    // Special handling for "Ready to Use" - requires both activity type AND readyToUse field
+    if (activityType === 'Roller Received') {
+      // Find the Ready to Use field - it has a dynamic ID like "ready_to_use?_1764057606859"
+      const allKeys = Object.keys(latestApprovedRecord);
+      const readyToUseKey = allKeys.find(key => key.toLowerCase().startsWith('ready_to_use'));
+
+      const readyValue = readyToUseKey ? latestApprovedRecord[readyToUseKey] : undefined;
+
+      console.log('Found Ready to Use field:', readyToUseKey);
+      console.log('Ready to Use value:', readyValue);
+
+      if (readyValue === 'Yes') {
+        return { label: 'Ready to Use', color: '#66BB6A' }; // Green
+      } else {
+        return { label: 'Under maintenance', color: '#FDD835' }; // Yellow - received but not ready
+      }
+    }
+
+    const statusMap = {
+      'Production Start': { label: 'Running', color: '#42A5F5' }, // Light Blue
+      'Production End': { label: 'To be sent', color: '#FF9800' }, // Orange
+      'Roller sent': { label: 'Under maintenance', color: '#FDD835' }  // Yellow
+    };
+
+    return statusMap[activityType] || { label: activityType || 'Unknown', color: '#9E9E9E' };
+  }, [records]);
+
   // Filter Records
   const filteredRecords = useMemo(() => {
     if (!selectedActivity) return records;
@@ -127,48 +168,76 @@ export default function RollerDetails() {
   return (
     <Container maxWidth="xl" sx={{ mt: 1 }}>
 
-      {/* Top Section: Roller Info + Activity Cards */}
+      {/* Back Button */}
+      <Box sx={{ mb: 2 }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/rollers')}
+          variant="outlined"
+          size="medium"
+        >
+          Back to Rollers
+        </Button>
+      </Box>
+
+      {/* Top Section: Roller Info + Current Status + Activity Cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {/* Main Info Card */}
-        <Grid item xs={12} md={5} lg={4}>
+        <Grid item xs={12} sm={6} md={3}>
           <Paper
             elevation={0}
             sx={{
               p: 2,
               height: '100%',
               display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
+              flexDirection: 'column',
+              justifyContent: 'center',
               bgcolor: 'white',
               borderRadius: 3,
               border: '1px solid #e0e0e0'
             }}
           >
-            <Box>
-              <Typography variant="h4" fontWeight="bold" color="primary.main">
-                #{roller.rollerNumber}
-              </Typography>
-              <Typography variant="h6" color="text.secondary" sx={{ lineHeight: 1.2 }}>
-                {roller.make}
-              </Typography>
-            </Box>
-            <Box textAlign="right">
-              <Typography variant="body1" color="text.secondary" fontWeight="medium">
-                {roller.design}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {roller.position}
-              </Typography>
-            </Box>
+            <Typography variant="h4" fontWeight="bold" color="primary.main" sx={{ mb: 0.5 }}>
+              #{roller.rollerNumber}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+              {roller.make}
+            </Typography>
           </Paper>
         </Grid>
 
+        {/* Current Status Tile */}
+        <Grid item xs={12} sm={6} md={3}>
+          <Card
+            sx={{
+              borderRadius: 3,
+              bgcolor: currentStatus.color,
+              color: 'white',
+              height: '100%',
+              boxShadow: '0 4px 15px 0 rgba(31, 38, 135, 0.15)',
+              transition: 'transform 0.2s, box-shadow 0.2s',
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: '0 8px 25px 0 rgba(31, 38, 135, 0.25)',
+              }
+            }}
+          >
+            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 }, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <Typography variant="caption" fontWeight="medium" sx={{ opacity: 0.85, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 0.5 }}>
+                Current Status
+              </Typography>
+              <Typography variant="h6" fontWeight="bold" sx={{ opacity: 0.95, wordWrap: 'break-word' }}>
+                {currentStatus.label}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
         {/* Activity Summary Cards */}
-        <Grid item xs={12} md={7} lg={8}>
+        <Grid item xs={12} md={6}>
           <Grid container spacing={2}>
             {activityStats.map((stat, index) => (
-              <Grid item xs={6} sm={4} md={3} key={stat.name}>
+              <Grid item xs={6} sm={6} md={4} lg={3} key={stat.name}>
                 <Card
                   sx={{
                     borderRadius: 3,
@@ -192,7 +261,7 @@ export default function RollerDetails() {
                       <Typography variant="h4" fontWeight="bold" sx={{ opacity: 0.95 }}>
                         {stat.approved}/{stat.total}
                       </Typography>
-                      <Typography variant="caption" fontWeight="bold" sx={{ opacity: 0.85, mt: 0.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      <Typography variant="caption" fontWeight="bold" sx={{ opacity: 0.85, mt: 0.5, textTransform: 'uppercase', letterSpacing: 0.5, wordWrap: 'break-word' }}>
                         {stat.name}
                       </Typography>
                     </Box>
@@ -253,12 +322,13 @@ export default function RollerDetails() {
                   {field.label}
                 </TableCell>
               ))}
+              <TableCell sx={{ fontWeight: 'bold', whiteSpace: 'nowrap', color: '#495057' }}>Approval Info</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {filteredRecords.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8 + customFields.length} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={9 + customFields.length} align="center" sx={{ py: 4 }}>
                   <Typography color="text.secondary">No records found</Typography>
                 </TableCell>
               </TableRow>
@@ -307,6 +377,7 @@ export default function RollerDetails() {
                       {row[field.id] !== undefined && row[field.id] !== null ? String(row[field.id]) : '-'}
                     </TableCell>
                   ))}
+                  <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.approvalInfo || '-'}</TableCell>
                 </TableRow>
               ))
             )}

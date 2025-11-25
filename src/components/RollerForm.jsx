@@ -7,7 +7,7 @@ import {
   Button,
   TextField,
   MenuItem,
-  Grid,
+  Stack,
   Box,
   InputAdornment,
   IconButton
@@ -23,30 +23,27 @@ import { useSnackbar } from 'notistack';
 import CloseIcon from '@mui/icons-material/Close';
 import TagIcon from '@mui/icons-material/Tag';         // Roller Number
 import BusinessIcon from '@mui/icons-material/Business'; // Make
-import BrushIcon from '@mui/icons-material/Brush';       // Design
 import FactoryIcon from '@mui/icons-material/Factory';   // Line
 import VerticalAlignTopIcon from '@mui/icons-material/VerticalAlignTop'; // Position
 
 const schema = yup.object().shape({
   rollerNumber: yup.string().required("Roller Number is required"),
   make: yup.string().required("Manufacturer Make is required"),
-  design: yup.string().required("Design Pattern is required"),
   position: yup.string().oneOf(['Top', 'Bottom']).required("Position is required"),
-  //line: yup.string().required("Production Line is required"),
-  line: yup.string().oneOf(['SG#1', 'SG#2', 'SG#3.1', 'SG#3,2']).required("Production Line is required"),
+  line: yup.string().oneOf(['SG#1', 'SG#2', 'SG#3.1', 'SG#3.2']).required("Production Line is required"),
 });
 
 export default function RollerForm({ open, onClose, initialData }) {
   const { control, handleSubmit, reset, formState: { errors } } = useForm({
     resolver: yupResolver(schema),
-    defaultValues: { rollerNumber: '', make: '', design: '', position: 'Top', line: '' }
+    defaultValues: { rollerNumber: '', make: '', position: 'Top', line: '' }
   });
 
   const { enqueueSnackbar } = useSnackbar();
 
   useEffect(() => {
     if (initialData) reset(initialData);
-    else reset({ rollerNumber: '', make: '', design: '', position: 'Top', line: '' });
+    else reset({ rollerNumber: '', make: '', position: 'Top', line: '' });
   }, [initialData, open, reset]);
 
   const onSubmit = async (data) => {
@@ -96,132 +93,108 @@ export default function RollerForm({ open, onClose, initialData }) {
       <form onSubmit={handleSubmit(onSubmit)}>
         <DialogContent sx={{ pt: 3 }}>
           <Box sx={{ mt: 1 }}>
-            <Grid container spacing={3}>
+            <Stack spacing={3}>
 
-              {/* Row 1: Roller Number (Primary ID) */}
-              <Grid item xs={12}>
-                <Controller
-                  name="rollerNumber"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      label="Roller Number"
-                      fullWidth
-                      placeholder="e.g. R-2025-001"
-                      error={!!errors.rollerNumber}
-                      helperText={errors.rollerNumber?.message}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <TagIcon color="primary" />
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-                  )}
-                />
-              </Grid>
+              {/* Roller Number (Primary ID) */}
+              <Controller
+                name="rollerNumber"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Roller Number"
+                    fullWidth
+                    placeholder="e.g. R-2025-001"
+                    error={!!errors.rollerNumber}
+                    helperText={errors.rollerNumber?.message}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <TagIcon color="primary" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                )}
+              />
 
-              {/* Row 2: Make & Design (Physical Attributes) */}
-              <Grid item xs={12} sm={6}>
-                <Controller
-                  name="make"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      label="Make / Manufacturer"
-                      fullWidth
-                      error={!!errors.make}
-                      helperText={errors.make?.message}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <BusinessIcon color="action" />
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-                  )}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Controller
-                  name="design"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      label="Design Pattern"
-                      fullWidth
-                      error={!!errors.design}
-                      helperText={errors.design?.message}
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <BrushIcon color="action" />
-                          </InputAdornment>
-                        ),
-                      }}
-                    />
-                  )}
-                />
-              </Grid>
+              {/* Make (Physical Attributes) */}
+              <Controller
+                name="make"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    select
+                    label="Make / Manufacturer"
+                    fullWidth
+                    error={!!errors.make}
+                    helperText={errors.make?.message}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <BusinessIcon color="action" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  >
+                    <MenuItem value="Fickert">Fickert</MenuItem>
+                    <MenuItem value="Rurex">Rurex</MenuItem>
+                    <MenuItem value="Rurex/Fickert">Rurex/Fickert</MenuItem>
+                  </TextField>
+                )}
+              />
 
-              {/* Row 3: Location Attributes */}
-              <Grid item xs={12} sm={6}>
-                <Controller
-                  name="line"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      select
-                      label="Production Line"
-                      placeholder='e.g. Line A'
-                      fullWidth
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <FactoryIcon color="action" />
-                          </InputAdornment>
-                        ),
-                      }}
-                    >
-                      <MenuItem value="SG#1">SG#1</MenuItem>
-                      <MenuItem value="SG#2">SG#2</MenuItem>
-                      <MenuItem value="SG#3.1">SG#3.1</MenuItem>
-                      <MenuItem value="SG#3.2">SG#3.2</MenuItem>
-                    </TextField>
-                  )}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Controller
-                  name="position"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      select
-                      label="Roller Position"
-                      fullWidth
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <VerticalAlignTopIcon color="action" />
-                          </InputAdornment>
-                        ),
-                      }}
-                    >
-                      <MenuItem value="Top">Top</MenuItem>
-                      <MenuItem value="Bottom">Bottom</MenuItem>
-                    </TextField>
-                  )}
-                />
-              </Grid>
-            </Grid>
+              {/* Location Attributes */}
+              <Controller
+                name="line"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    select
+                    label="Production Line"
+                    placeholder='e.g. Line A'
+                    fullWidth
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <FactoryIcon color="action" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  >
+                    <MenuItem value="SG#1">SG#1</MenuItem>
+                    <MenuItem value="SG#2">SG#2</MenuItem>
+                    <MenuItem value="SG#3.1">SG#3.1</MenuItem>
+                    <MenuItem value="SG#3.2">SG#3.2</MenuItem>
+                  </TextField>
+                )}
+              />
+
+              <Controller
+                name="position"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    select
+                    label="Roller Position"
+                    fullWidth
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <VerticalAlignTopIcon color="action" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  >
+                    <MenuItem value="Top">Top</MenuItem>
+                    <MenuItem value="Bottom">Bottom</MenuItem>
+                  </TextField>
+                )}
+              />
+            </Stack>
           </Box>
         </DialogContent>
 

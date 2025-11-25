@@ -64,23 +64,15 @@ function TabPanel(props) {
 }
 
 // Default System Fields (cannot be deleted, only hidden)
-const DEFAULT_FIELDS = [
-  { id: 'date', label: 'Date of Activity', type: 'date', required: true, visible: true, isSystem: true },
-  { id: 'activity', label: 'Activity Type', type: 'text', required: true, visible: true, isSystem: true },
-  { id: 'runningLine', label: 'Current Running Line', type: 'dropdown', required: true, visible: true, isSystem: true, options: 'SG#1,SG#2,SG#3.1,SG#3.2' },
-  { id: 'rollerDiameter', label: 'Roller Diameter', type: 'number', required: true, visible: true, isSystem: true },
-  { id: 'rollerRa', label: 'Roller Ra', type: 'number', required: true, visible: true, isSystem: true },
-  { id: 'rollerRz', label: 'Roller Rz', type: 'number', required: true, visible: true, isSystem: true },
-  { id: 'glassRa', label: 'Glass Ra', type: 'number', required: true, visible: true, isSystem: true },
-  { id: 'glassRz', label: 'Glass Rz', type: 'number', required: true, visible: true, isSystem: true },
-  { id: 'remarks', label: 'Remarks', type: 'long_text', required: false, visible: true, isSystem: true },
-];
+// Default System Fields (cannot be deleted, only hidden)
+import { DEFAULT_FIELDS } from '../constants/formFields';
 
 export default function Settings() {
   const [value, setValue] = useState(0);
   const [dropdowns, setDropdowns] = useState({
     activityTypes: [],
-    lines: []
+    lines: [],
+    designPatterns: []
   });
   const [newOption, setNewOption] = useState('');
   const [selectedDropdown, setSelectedDropdown] = useState('activityTypes');
@@ -121,7 +113,8 @@ export default function Settings() {
       } else {
         const initialData = {
           activityTypes: ['Production Start', 'Production End', 'Roller Sent', 'Roller Received'],
-          lines: ['SG#1', 'SG#2', 'SG#3.1', 'SG#3.2']
+          lines: ['SG#1', 'SG#2', 'SG#3.1', 'SG#3.2'],
+          designPatterns: ['Pattern A', 'Pattern B']
         };
         await setDoc(docRef, initialData);
         setDropdowns(initialData);
@@ -136,10 +129,39 @@ export default function Settings() {
     try {
       const docRef = doc(db, 'formConfigs', activityType);
       const docSnap = await getDoc(docRef);
+
+      // Filter out date and activity as they are handled separately in the UI
+      const defaultSystemFields = DEFAULT_FIELDS.filter(f => f.id !== 'date' && f.id !== 'activity');
+
       if (docSnap.exists() && docSnap.data().fields) {
-        setFields(docSnap.data().fields);
+        const savedFields = docSnap.data().fields;
+        const savedFieldsMap = new Map(savedFields.map(f => [f.id, f]));
+        const systemFieldIds = new Set(DEFAULT_FIELDS.map(f => f.id));
+
+        // 1. Merge System Fields (Enforce default order and latest definitions)
+        const mergedFields = defaultSystemFields.map(defaultField => {
+          const savedField = savedFieldsMap.get(defaultField.id);
+          if (savedField) {
+            // Keep saved visibility and required status, but update definition
+            return {
+              ...defaultField,
+              visible: savedField.visible,
+              required: savedField.required
+            };
+          }
+          return defaultField; // New system field found in defaults but not in DB
+        });
+
+        // 2. Append Custom Fields (Preserve user-added fields)
+        savedFields.forEach(savedField => {
+          if (!systemFieldIds.has(savedField.id)) {
+            mergedFields.push(savedField);
+          }
+        });
+
+        setFields(mergedFields);
       } else {
-        setFields(DEFAULT_FIELDS.filter(f => f.id !== 'date' && f.id !== 'activity'));
+        setFields(defaultSystemFields);
       }
     } catch (error) {
       console.error("Error fetching form config:", error);
@@ -258,7 +280,8 @@ export default function Settings() {
 
   const dropdownLabels = {
     activityTypes: 'Activity Types',
-    lines: 'Production Lines'
+    lines: 'Production Lines',
+    designPatterns: 'Design Patterns'
   };
 
   return (
@@ -287,6 +310,7 @@ export default function Settings() {
                 >
                   <MenuItem value="activityTypes">Activity Types</MenuItem>
                   <MenuItem value="lines">Production Lines</MenuItem>
+                  <MenuItem value="designPatterns">Design Patterns</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -391,7 +415,7 @@ export default function Settings() {
                                   <Chip label={field.type} size="small" variant="outlined" />
                                   {field.type === 'dropdown' && (
                                     <Typography variant="caption" display="block" color="text.secondary">
-                                      {field.options}
+                                      {field.useGlobalOptions ? `Global: ${dropdownLabels[field.useGlobalOptions]}` : field.options}
                                     </Typography>
                                   )}
                                 </TableCell>

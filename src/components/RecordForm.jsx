@@ -124,8 +124,10 @@ export default function RecordForm({ open, onClose, initialData, rollerId }) {
           setFieldsConfig(docSnap.data().fields);
         } else {
           setFieldsConfig([
-            { id: 'runningLine', label: 'Current Running Line', type: 'dropdown', required: true, visible: true, options: 'SG#1,SG#2,SG#3.1,SG#3.2' },
-            { id: 'rollerDiameter', label: 'Roller Diameter', type: 'number', required: true, visible: true },
+            { id: 'runningLine', label: 'Current Running Line', type: 'dropdown', required: true, visible: true, useGlobalOptions: 'lines' },
+            { id: 'rollerInnerDiameter', label: 'Roller Inner Dia.', type: 'decimal', required: true, visible: true },
+            { id: 'rollerDiameter', label: 'Roller Outer Dia.', type: 'number', required: true, visible: true },
+            { id: 'designPattern', label: 'Design Pattern', type: 'dropdown', required: false, visible: true, useGlobalOptions: 'designPatterns' },
             { id: 'rollerRa', label: 'Roller Ra', type: 'number', required: true, visible: true },
             { id: 'rollerRz', label: 'Roller Rz', type: 'number', required: true, visible: true },
             { id: 'glassRa', label: 'Glass Ra', type: 'number', required: true, visible: true },
@@ -175,6 +177,15 @@ export default function RecordForm({ open, onClose, initialData, rollerId }) {
         });
 
       } else {
+        // If editing an existing record that was previously approved/rejected,
+        // reset to Pending to require re-approval
+        if (initialData.status === 'Approved' || initialData.status === 'Rejected') {
+          payload.status = 'Pending';
+          payload.approvedBy = null;
+          payload.approvedAt = null;
+          payload.approvalInfo = null;
+        }
+
         await updateDoc(doc(db, `rollers/${rollerId}/records`, initialData.id), payload);
 
         // Also update parent if editing the latest record? 
@@ -207,23 +218,17 @@ export default function RecordForm({ open, onClose, initialData, rollerId }) {
     const isLongText = field.type === 'long_text';
     const isNumber = field.type === 'number' || field.type === 'decimal';
 
-    const gridProps = {
-      item: true,
-      xs: 12,
-      key: field.id,
-      sx: { width: '100%' }
-    };
-
     // Date
     if (field.type === 'date') {
       return (
-        <Grid {...gridProps}>
+        <Grid key={field.id} item xs={12} sx={{ width: '100%' }}>
           <Controller
             name={field.id}
             control={control}
             render={({ field: controllerField }) => (
               <DatePicker
                 {...controllerField}
+                value={controllerField.value || null}
                 label={field.label}
                 slotProps={{
                   textField: {
@@ -244,13 +249,14 @@ export default function RecordForm({ open, onClose, initialData, rollerId }) {
     // Time
     if (field.type === 'time') {
       return (
-        <Grid {...gridProps}>
+        <Grid key={field.id} item xs={12} sx={{ width: '100%' }}>
           <Controller
             name={field.id}
             control={control}
             render={({ field: controllerField }) => (
               <TimePicker
                 {...controllerField}
+                value={controllerField.value || null}
                 label={field.label}
                 slotProps={{
                   textField: {
@@ -270,9 +276,15 @@ export default function RecordForm({ open, onClose, initialData, rollerId }) {
 
     // Dropdown
     if (field.type === 'dropdown') {
-      const options = field.options ? field.options.split(',').map(s => s.trim()) : [];
+      let options = [];
+      if (field.useGlobalOptions && dropdowns[field.useGlobalOptions]) {
+        options = dropdowns[field.useGlobalOptions];
+      } else if (field.options) {
+        options = field.options.split(',').map(s => s.trim());
+      }
+
       return (
-        <Grid {...gridProps}>
+        <Grid key={field.id} item xs={12} sx={{ width: '100%' }}>
           <Controller
             name={field.id}
             control={control}
@@ -283,6 +295,7 @@ export default function RecordForm({ open, onClose, initialData, rollerId }) {
                 size="medium"
                 label={field.label}
                 {...controllerField}
+                value={controllerField.value || ''}
                 error={!!errors[field.id]}
                 helperText={errors[field.id]?.message}
                 sx={fieldSx}
@@ -306,7 +319,7 @@ export default function RecordForm({ open, onClose, initialData, rollerId }) {
 
     // Text / Number / Decimal / Long Text
     return (
-      <Grid {...gridProps}>
+      <Grid key={field.id} item xs={12} sx={{ width: '100%' }}>
         <Controller
           name={field.id}
           control={control}
@@ -320,6 +333,7 @@ export default function RecordForm({ open, onClose, initialData, rollerId }) {
               minRows={isLongText ? 3 : 1}
               inputProps={field.type === 'decimal' ? { step: "0.01" } : {}}
               {...controllerField}
+              value={controllerField.value || ''}
               error={!!errors[field.id]}
               helperText={errors[field.id]?.message}
               sx={isLongText ? {
