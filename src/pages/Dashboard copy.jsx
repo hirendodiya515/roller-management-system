@@ -43,9 +43,9 @@ export default function Dashboard() {
       const rollerData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setRollers(rollerData);
 
-      // Fetch latest approved record for each roller to get current status in PARALLEL
-      // This improves loading speed by 8-10x compared to sequential fetching
-      const recordPromises = rollerData.map(async (roller) => {
+      // Fetch latest approved record for each roller to get current status
+      const recordsData = {};
+      for (const roller of rollerData) {
         try {
           const recordsQuery = query(
             collection(db, `rollers/${roller.id}/records`),
@@ -60,6 +60,7 @@ export default function Dashboard() {
             const latestRecord = approvedRecords[0];
             const activityType = latestRecord.activity;
 
+            // Calculate current status using same logic as RollerDetails
             let currentStatus = 'No Activity';
 
             if (activityType === 'Roller Received') {
@@ -76,21 +77,15 @@ export default function Dashboard() {
               currentStatus = 'Under maintenance';
             }
 
-            return { id: roller.id, status: currentStatus };
+            recordsData[roller.id] = currentStatus;
           } else {
-            return { id: roller.id, status: 'No Activity' };
+            recordsData[roller.id] = 'No Activity';
           }
         } catch (error) {
           console.error(`Error fetching records for roller ${roller.id}:`, error);
-          return { id: roller.id, status: 'No Activity' };
+          recordsData[roller.id] = 'No Activity';
         }
-      });
-
-      const results = await Promise.all(recordPromises);
-      const recordsData = {};
-      results.forEach(r => {
-        recordsData[r.id] = r.status;
-      });
+      }
 
       setRecords(recordsData);
       setLoading(false);
@@ -243,7 +238,7 @@ export default function Dashboard() {
     <Box>
       <Box display="flex" alignItems="center" mb={4}>
         <AnalyticsIcon color="primary" sx={{ fontSize: 40, mr: 2 }} />
-        <Typography variant="h5" fontWeight="bold" color="primary">
+        <Typography variant="h4" fontWeight="bold" color="primary">
           Roller Stock Overview
         </Typography>
       </Box>
