@@ -10,6 +10,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import InventoryIcon from '@mui/icons-material/Inventory'; // For Rollers
 import LogoutIcon from '@mui/icons-material/Logout';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import SettingsIcon from '@mui/icons-material/Settings';
 
@@ -36,6 +37,7 @@ export default function Layout() {
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
     { text: 'Rollers', icon: <InventoryIcon />, path: '/rollers' },
+    { text: 'Analysis', icon: <AssessmentIcon />, path: '/analysis' },
   ];
 
   if (userRole === 'Admin') {
