@@ -1,0 +1,11 @@
+node_modules/
+
+# Environment variables
+.env
+
+# Logs
+*.log
+firebase-debug.log*
+
+# Firebase
+.firebase/

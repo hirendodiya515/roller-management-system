@@ -278,93 +278,10 @@ export default function Settings() {
     }
   };
 
-
   const dropdownLabels = {
     activityTypes: 'Activity Types',
     lines: 'Production Lines',
     designPatterns: 'Design Patterns'
-  };
-
-  // Alert Config State
-  const [alertConfig, setAlertConfig] = useState({
-    productionEndDelay: { enabled: false, days: 5 },
-    rollerSentDelay: { enabled: false, days: 5 }
-  });
-  const [emailJsConfig, setEmailJsConfig] = useState({
-    serviceId: '',
-    templateId: '',
-    publicKey: '',
-    toEmails: '',
-    ccEmails: ''
-  });
-  const [checkingAlerts, setCheckingAlerts] = useState(false);
-
-  useEffect(() => {
-    fetchAlertSettings();
-    fetchEmailJsSettings();
-  }, []);
-
-  const fetchAlertSettings = async () => {
-    try {
-      const docRef = doc(db, 'settings', 'alerts');
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setAlertConfig(docSnap.data());
-      }
-    } catch (error) {
-      console.error("Error fetching alert settings:", error);
-    }
-  };
-
-  const fetchEmailJsSettings = async () => {
-    try {
-      const docRef = doc(db, 'settings', 'emailjs');
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setEmailJsConfig(docSnap.data());
-      }
-    } catch (error) {
-      console.error("Error fetching emailjs settings:", error);
-    }
-  };
-
-  const handleAlertConfigChange = (key, field, value) => {
-    setAlertConfig(prev => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        [field]: value
-      }
-    }));
-  };
-
-  const handleSaveAlertConfig = async () => {
-    try {
-      await setDoc(doc(db, 'settings', 'alerts'), alertConfig);
-      await setDoc(doc(db, 'settings', 'emailjs'), emailJsConfig);
-      enqueueSnackbar('Configuration saved successfully', { variant: 'success' });
-    } catch (error) {
-      enqueueSnackbar('Error saving configuration', { variant: 'error' });
-    }
-  };
-
-  const handleRunAlertCheck = async () => {
-    if (!emailJsConfig.serviceId || !emailJsConfig.templateId || !emailJsConfig.publicKey) {
-      enqueueSnackbar('Please configure EmailJS settings first', { variant: 'warning' });
-      return;
-    }
-
-    setCheckingAlerts(true);
-    try {
-      const { checkAndTriggerAlerts } = await import('../services/alertService');
-      const result = await checkAndTriggerAlerts(alertConfig, emailJsConfig);
-      enqueueSnackbar(`Check complete. ${result.alertsSent} alerts sent out of ${result.checked} rollers.`, { variant: 'info' });
-    } catch (error) {
-      console.error(error);
-      enqueueSnackbar('Error running alert check: ' + error.message, { variant: 'error' });
-    } finally {
-      setCheckingAlerts(false);
-    }
   };
 
   return (
@@ -378,7 +295,6 @@ export default function Settings() {
           <Tab label="Dropdown Management" />
           <Tab label="Form Customization" />
           <Tab label="User Management" />
-          <Tab label="Alert Configuration" />
         </Tabs>
 
         {/* Tab 1: Dropdown Management */}
@@ -600,171 +516,10 @@ export default function Settings() {
           </TableContainer>
         </TabPanel>
 
-        {/* Tab 4: Alert Configuration */}
-        <TabPanel value={value} index={3}>
-          <Box sx={{ maxWidth: 800, mx: 'auto' }}>
-            <Typography variant="h6" gutterBottom>
-              Email Alert Configuration
-            </Typography>
-            <Typography variant="body2" color="text.secondary" paragraph>
-              Configure email alerts for delayed rollers using EmailJS (Free Plan).
-            </Typography>
-
-            {/* EmailJS Credentials */}
-            <Paper variant="outlined" sx={{ p: 3, mb: 3, bgcolor: '#f8f9fa' }}>
-              <Typography variant="subtitle1" fontWeight="bold" gutterBottom>
-                EmailJS Credentials
-              </Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Service ID"
-                    value={emailJsConfig.serviceId}
-                    onChange={(e) => setEmailJsConfig({ ...emailJsConfig, serviceId: e.target.value })}
-                    placeholder="service_xxxxx"
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Template ID"
-                    value={emailJsConfig.templateId}
-                    onChange={(e) => setEmailJsConfig({ ...emailJsConfig, templateId: e.target.value })}
-                    placeholder="template_xxxxx"
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Public Key"
-                    value={emailJsConfig.publicKey}
-                    onChange={(e) => setEmailJsConfig({ ...emailJsConfig, publicKey: e.target.value })}
-                    placeholder="user_xxxxx"
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="To Emails (comma-separated)"
-                    value={emailJsConfig.toEmails || ''}
-                    onChange={(e) => setEmailJsConfig({ ...emailJsConfig, toEmails: e.target.value })}
-                    placeholder="email1@example.com, email2@example.com"
-                    helperText="Enter multiple email addresses separated by commas"
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="CC Emails (comma-separated, optional)"
-                    value={emailJsConfig.ccEmails || ''}
-                    onChange={(e) => setEmailJsConfig({ ...emailJsConfig, ccEmails: e.target.value })}
-                    placeholder="cc1@example.com, cc2@example.com"
-                    helperText="Optional: CC recipients"
-                  />
-                </Grid>
-              </Grid>
-            </Paper>
-
-            {/* Alert Rules */}
-            <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
-              <Grid container spacing={3} alignItems="center">
-                <Grid item xs={12} sm={8}>
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    Production End Delay
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Alert if roller is in "Production End" status for more than X days without being sent.
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} sm={4} display="flex" alignItems="center" gap={2}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={alertConfig.productionEndDelay?.enabled || false}
-                        onChange={(e) => handleAlertConfigChange('productionEndDelay', 'enabled', e.target.checked)}
-                      />
-                    }
-                    label="Enable"
-                  />
-                  <TextField
-                    type="number"
-                    size="small"
-                    label="Days"
-                    sx={{ width: 80 }}
-                    value={alertConfig.productionEndDelay?.days || 5}
-                    onChange={(e) => handleAlertConfigChange('productionEndDelay', 'days', parseInt(e.target.value) || 0)}
-                    disabled={!alertConfig.productionEndDelay?.enabled}
-                  />
-                </Grid>
-
-                <Grid item xs={12}>
-                  <Divider />
-                </Grid>
-
-                <Grid item xs={12} sm={8}>
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    Vendor Return Delay
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Alert if roller was "Sent to Vendor" more than X days ago and not yet received.
-                  </Typography>
-                </Grid>
-                <Grid item xs={12} sm={4} display="flex" alignItems="center" gap={2}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={alertConfig.rollerSentDelay?.enabled || false}
-                        onChange={(e) => handleAlertConfigChange('rollerSentDelay', 'enabled', e.target.checked)}
-                      />
-                    }
-                    label="Enable"
-                  />
-                  <TextField
-                    type="number"
-                    size="small"
-                    label="Days"
-                    sx={{ width: 80 }}
-                    value={alertConfig.rollerSentDelay?.days || 5}
-                    onChange={(e) => handleAlertConfigChange('rollerSentDelay', 'days', parseInt(e.target.value) || 0)}
-                    disabled={!alertConfig.rollerSentDelay?.enabled}
-                  />
-                </Grid>
-              </Grid>
-            </Paper>
-
-            <Box display="flex" justifyContent="space-between" alignItems="center">
-              <Button
-                variant="outlined"
-                color="secondary"
-                onClick={handleRunAlertCheck}
-                disabled={checkingAlerts}
-              >
-                {checkingAlerts ? 'Checking...' : 'Run Alert Check Now'}
-              </Button>
-
-              <Button
-                variant="contained"
-                startIcon={<SaveIcon />}
-                onClick={handleSaveAlertConfig}
-                size="large"
-              >
-                Save Configuration
-              </Button>
-            </Box>
-          </Box>
-        </TabPanel>
-
       </Paper>
 
       {/* Add Field Dialog */}
-      <Dialog open={openAddDialog} onClose={() => setOpenAddDialog(false)
-      }>
+      <Dialog open={openAddDialog} onClose={() => setOpenAddDialog(false)}>
         <DialogTitle>Add Custom Field</DialogTitle>
         <DialogContent sx={{ pt: 2, minWidth: 400 }}>
           <Box display="flex" flexDirection="column" gap={2} mt={1}>
@@ -807,7 +562,7 @@ export default function Settings() {
           <Button onClick={() => setOpenAddDialog(false)}>Cancel</Button>
           <Button onClick={handleAddField} variant="contained" disabled={!newField.label}>Add</Button>
         </DialogActions>
-      </Dialog >
-    </Container >
+      </Dialog>
+    </Container>
   );
 }
