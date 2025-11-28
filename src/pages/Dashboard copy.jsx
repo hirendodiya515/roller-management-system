@@ -25,7 +25,7 @@ const LINES = ['SG#1', 'SG#2', 'SG#3']; // Only 3 lines now
 // Status colors matching RollerDetails
 const STATUS_COLORS = {
   'Running': '#42A5F5',           // Light Blue
-  'Sent to Vendor': '#FDD835', // Yellow
+  'Under maintenance': '#FDD835', // Yellow
   'To be sent': '#FF9800',        // Orange
   'Ready to Use': '#66BB6A',      // Green
   'No Activity': '#9E9E9E'        // Grey
@@ -67,13 +67,13 @@ export default function Dashboard() {
               const readyToUseKey = allKeys.find(key => key.toLowerCase().startsWith('ready_to_use'));
               const readyValue = readyToUseKey ? latestRecord[readyToUseKey] : undefined;
 
-              currentStatus = readyValue === 'Yes' ? 'Ready to Use' : 'Sent to Vendor';
+              currentStatus = readyValue === 'Yes' ? 'Ready to Use' : 'Under maintenance';
             } else if (activityType === 'Production Start') {
               currentStatus = 'Running';
             } else if (activityType === 'Production End') {
               currentStatus = 'To be sent';
             } else if (activityType === 'Roller sent') {
-              currentStatus = 'Sent to Vendor';
+              currentStatus = 'Under maintenance';
             }
 
             return { id: roller.id, status: currentStatus };
@@ -121,7 +121,7 @@ export default function Dashboard() {
     // Count by status
     const statusCounts = {
       'Running': 0,
-      'Sent to Vendor': 0,
+      'Under maintenance': 0,
       'To be sent': 0,
       'Ready to Use': 0
     };

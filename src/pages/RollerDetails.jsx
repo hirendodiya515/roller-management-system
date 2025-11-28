@@ -53,7 +53,7 @@ export default function RollerDetails() {
   const [selectedActivity, setSelectedActivity] = useState(null);
   const { userRole, currentUser } = useAuth();
 
-  const SYSTEM_FIELDS = ['rollerDiameter', 'runningLine', 'rollerRa', 'rollerRz', 'glassRa', 'glassRz', 'date', 'activity'];
+  const SYSTEM_FIELDS = ['rollerDiameter', 'runningLine', 'rollerRa', 'rollerRz', 'date', 'activity'];
 
   useEffect(() => {
     getDoc(doc(db, 'rollers', id)).then(d => setRoller(d.data()));
@@ -142,14 +142,14 @@ export default function RollerDetails() {
       if (readyValue === 'Yes') {
         return { label: 'Ready to Use', color: '#66BB6A' }; // Green
       } else {
-        return { label: 'Under maintenance', color: '#FDD835' }; // Yellow - received but not ready
+        return { label: 'Sent to Vendor', color: '#FDD835' }; // Yellow - received but not ready
       }
     }
 
     const statusMap = {
       'Production Start': { label: 'Running', color: '#42A5F5' }, // Light Blue
       'Production End': { label: 'To be sent', color: '#FF9800' }, // Orange
-      'Roller sent': { label: 'Under maintenance', color: '#FDD835' }  // Yellow
+      'Roller sent': { label: 'Sent to Vendor', color: '#FDD835' }  // Yellow
     };
 
     return statusMap[activityType] || { label: activityType || 'Unknown', color: '#9E9E9E' };
@@ -201,7 +201,7 @@ export default function RollerDetails() {
               #{roller.rollerNumber}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-              {roller.make}
+              {roller.make} • {roller.line} - {roller.position}
             </Typography>
           </Paper>
         </Grid>
@@ -316,7 +316,6 @@ export default function RollerDetails() {
               <TableCell sx={{ fontWeight: 'bold', whiteSpace: 'nowrap', color: '#495057' }}>Diameter</TableCell>
               <TableCell sx={{ fontWeight: 'bold', whiteSpace: 'nowrap', color: '#495057' }}>Run. Line</TableCell>
               <TableCell sx={{ fontWeight: 'bold', whiteSpace: 'nowrap', color: '#495057' }}>Roller Ra/Rz</TableCell>
-              <TableCell sx={{ fontWeight: 'bold', whiteSpace: 'nowrap', color: '#495057' }}>Glass Ra/Rz</TableCell>
               {customFields.map(field => (
                 <TableCell key={field.id} sx={{ fontWeight: 'bold', whiteSpace: 'nowrap', color: '#495057' }}>
                   {field.label}
@@ -371,7 +370,6 @@ export default function RollerDetails() {
                   <TableCell>{row.rollerDiameter}</TableCell>
                   <TableCell>{row.runningLine}</TableCell>
                   <TableCell>{row.rollerRa} / {row.rollerRz}</TableCell>
-                  <TableCell>{row.glassRa} / {row.glassRz}</TableCell>
                   {customFields.map(field => (
                     <TableCell key={field.id}>
                       {row[field.id] !== undefined && row[field.id] !== null ? String(row[field.id]) : '-'}

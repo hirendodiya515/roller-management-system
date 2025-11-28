@@ -125,13 +125,10 @@ export default function RecordForm({ open, onClose, initialData, rollerId }) {
         } else {
           setFieldsConfig([
             { id: 'runningLine', label: 'Current Running Line', type: 'dropdown', required: true, visible: true, useGlobalOptions: 'lines' },
-            { id: 'rollerInnerDiameter', label: 'Roller Inner Dia.', type: 'decimal', required: true, visible: true },
             { id: 'rollerDiameter', label: 'Roller Outer Dia.', type: 'number', required: true, visible: true },
             { id: 'designPattern', label: 'Design Pattern', type: 'dropdown', required: false, visible: true, useGlobalOptions: 'designPatterns' },
             { id: 'rollerRa', label: 'Roller Ra', type: 'number', required: true, visible: true },
             { id: 'rollerRz', label: 'Roller Rz', type: 'number', required: true, visible: true },
-            { id: 'glassRa', label: 'Glass Ra', type: 'number', required: true, visible: true },
-            { id: 'glassRz', label: 'Glass Rz', type: 'number', required: true, visible: true },
             { id: 'remarks', label: 'Remarks', type: 'long_text', required: false, visible: true },
           ]);
         }

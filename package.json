@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cleanup-fields": "node scripts/cleanup-fields.js",
+    "cleanup-form-configs": "node scripts/cleanup-form-configs.js"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

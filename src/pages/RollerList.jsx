@@ -86,13 +86,13 @@ export default function RollerList() {
               const readyToUseKey = allKeys.find(key => key.toLowerCase().startsWith('ready_to_use'));
               const readyValue = readyToUseKey ? latestRecord[readyToUseKey] : undefined;
 
-              currentStatus = readyValue === 'Yes' ? 'Ready to Use' : 'Under maintenance';
+              currentStatus = readyValue === 'Yes' ? 'Ready to Use' : 'Sent to Vendor';
             } else if (activityType === 'Production Start') {
               currentStatus = 'Running';
             } else if (activityType === 'Production End') {
               currentStatus = 'To be sent';
             } else if (activityType === 'Roller sent') {
-              currentStatus = 'Under maintenance';
+              currentStatus = 'Sent to Vendor';
             }
 
             return { id: roller.id, status: currentStatus };
@@ -376,8 +376,8 @@ export default function RollerList() {
       {/* Add/Edit Form Dialog */}
       <RollerForm
         open={openForm}
-        handleClose={handleClose}
-        editData={editData}
+        onClose={handleClose}
+        initialData={editData}
       />
     </Container>
   );
