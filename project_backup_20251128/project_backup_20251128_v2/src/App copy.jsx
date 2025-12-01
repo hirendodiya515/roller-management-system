@@ -7,14 +7,10 @@ import { AuthProvider } from './context/AuthContext';
 import { theme } from './theme';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import RollerList from './pages/RollerList';     // <-- The Renamed List Page
 import RollerDetails from './pages/RollerDetails';
-import Analysis from './pages/Analysis';
-import Settings from './pages/Settings';
 import ProtectedRoute from './components/AuthRoute';
 import Layout from './components/Layout';
 import { CssBaseline } from '@mui/material'; // <--- Import this
-import Help from './pages/Help';
 
 function App() {
   return (
@@ -25,14 +21,10 @@ function App() {
           <AuthProvider>
             <Routes>
               <Route path="/login" element={<Login />} />
-
+              
               <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
                 <Route path="/" element={<Dashboard />} />
-                <Route path="/rollers" element={<RollerList />} />      {/* Inventory Page */}
                 <Route path="/roller/:id" element={<RollerDetails />} />
-                <Route path="/analysis" element={<Analysis />} />        {/* Analysis Page */}
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/help" element={<Help />} />
               </Route>
             </Routes>
           </AuthProvider>

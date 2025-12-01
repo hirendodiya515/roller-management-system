@@ -26,5 +26,4 @@ dist-ssr
 
 # Firebase
 .firebase/
-.project_backup_20251128_v2
-.project_backup_20251128
+.src_backup_20251128/*

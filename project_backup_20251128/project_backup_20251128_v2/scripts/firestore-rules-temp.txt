@@ -1,0 +1,18 @@
+// TEMPORARY Firestore Rules for Running Cleanup Script
+// WARNING: These rules allow unrestricted access - use only temporarily!
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
+
+// INSTRUCTIONS:
+// 1. Go to Firebase Console > Firestore Database > Rules
+// 2. Replace your current rules with the above (save your original rules first!)
+// 3. Publish the rules
+// 4. Run the cleanup script: npm run cleanup-fields
+// 5. IMMEDIATELY restore your original security rules after the script completes

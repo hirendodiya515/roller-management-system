@@ -14,7 +14,6 @@ import Settings from './pages/Settings';
 import ProtectedRoute from './components/AuthRoute';
 import Layout from './components/Layout';
 import { CssBaseline } from '@mui/material'; // <--- Import this
-import Help from './pages/Help';
 
 function App() {
   return (
@@ -32,7 +31,6 @@ function App() {
                 <Route path="/roller/:id" element={<RollerDetails />} />
                 <Route path="/analysis" element={<Analysis />} />        {/* Analysis Page */}
                 <Route path="/settings" element={<Settings />} />
-                <Route path="/help" element={<Help />} />
               </Route>
             </Routes>
           </AuthProvider>
