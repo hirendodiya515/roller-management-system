@@ -234,7 +234,7 @@ export default function Dashboard() {
     });
 
     return (
-      <Grid item xs={12} sm={6} md={true} sx={{ flexGrow: 1, flexBasis: 0 }} key={`running-${line}`}>
+      <Grid item xs={12} sm={6} md={3} key={`running-${line}`}>
         <Card
           elevation={2}
           sx={{
@@ -314,7 +314,7 @@ export default function Dashboard() {
     });
 
     return (
-      <Grid item xs={12} sm={6} md={true} sx={{ flexGrow: 1, flexBasis: 0 }} key={`prod-end-${line}`}>
+      <Grid item xs={12} sm={6} md={3} key={`prod-end-${line}`}>
         <Card
           elevation={2}
           sx={{
