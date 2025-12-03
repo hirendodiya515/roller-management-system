@@ -4,8 +4,8 @@
   <a href="#guide-version" class="version-card">
     <div class="info-tile">
       <h3>Version</h3>
-      <p>v1.5.0 (Nov 2025)</p>
-      <p style="font-size: 0.9rem; font-weight: normal; margin-top: 5px;">30-Nov-2025</p>
+      <p>v2.0.0</p>
+      <p style="font-size: 0.9rem; font-weight: normal; margin-top: 5px;">03-Dec-2025</p>
     </div>
   </a>
   <div class="info-tile">
@@ -68,5 +68,6 @@ Roller management system is an inventory management system for the Rolling machi
 ### CHANGELOG
 | Version | Changes |
 | :--- | :--- |
+| 2.0.0 | <div id="guide-version" style="scroll-margin-top: 100px;">**03-Dec-2025**<br><ul><li>Added Roller PDI option in the activity type, when user select this option then it will add the PDI form in the history records, by clicking on the audit Icon *(in history page)* it will open the PDI form.</li><li>Added **PDI Report** page where you can see the PDI report of all rollers, Extract PDF report too.</li></ul>
 | 1.5.0 | <div id="guide-version" style="scroll-margin-top: 100px;">**01-Dec-2025**<br><ul><li>Help page added *(with all pages description and images)* including changelog details. </li></ul>  |
 | 1.0.0 | **28-Nov-2025**<br><ul><li>Initial release with Basic Stock insights, roller detail with approval flow, dynamic form for history records, analysis page with charts and export functionality, and role based access *(admin, approver, editor and viewer)*. </li></ul>  |

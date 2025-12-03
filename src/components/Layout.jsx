@@ -14,6 +14,7 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import SettingsIcon from '@mui/icons-material/Settings';
 import HelpIcon from '@mui/icons-material/Help';
+import FactCheckIcon from '@mui/icons-material/FactCheck';
 
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../config/firebase';
@@ -39,6 +40,7 @@ export default function Layout() {
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
     { text: 'Rollers', icon: <InventoryIcon />, path: '/rollers' },
     { text: 'Analysis', icon: <AssessmentIcon />, path: '/analysis' },
+    { text: 'PDI Report', icon: <FactCheckIcon />, path: '/pdi-reports' },
     { text: 'Help', icon: <HelpIcon />, path: '/help' },
   ];
 

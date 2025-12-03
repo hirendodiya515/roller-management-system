@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import RollerList from './pages/RollerList';     // <-- The Renamed List Page
 import RollerDetails from './pages/RollerDetails';
 import Analysis from './pages/Analysis';
+import PDIReports from './pages/PDIReports';
 import Settings from './pages/Settings';
 import ProtectedRoute from './components/AuthRoute';
 import Layout from './components/Layout';
@@ -32,6 +33,7 @@ function App() {
                 <Route path="/roller/:id" element={<RollerDetails />} />
                 <Route path="/analysis" element={<Analysis />} />        {/* Analysis Page */}
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/pdi-reports" element={<PDIReports />} />
                 <Route path="/help" element={<Help />} />
               </Route>
             </Routes>

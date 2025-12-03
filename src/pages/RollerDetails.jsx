@@ -26,10 +26,12 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import EditIcon from '@mui/icons-material/Edit';
 import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import FactCheckIcon from '@mui/icons-material/FactCheck';
 import { doc, getDoc, collection, onSnapshot, query, orderBy, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import RecordForm from '../components/RecordForm';
+import AuditForm from '../components/AuditForm';
 import { format } from 'date-fns';
 
 // Gradient Presets
@@ -49,6 +51,8 @@ export default function RollerDetails() {
   const [records, setRecords] = useState([]);
   const [openForm, setOpenForm] = useState(false);
   const [recordToEdit, setRecordToEdit] = useState(null);
+  const [openAudit, setOpenAudit] = useState(false);
+  const [selectedAuditRecord, setSelectedAuditRecord] = useState(null);
   const [customFields, setCustomFields] = useState([]);
   const [selectedActivity, setSelectedActivity] = useState(null);
   const { userRole, currentUser } = useAuth();
@@ -364,6 +368,18 @@ export default function RollerDetails() {
                         </IconButton>
                       </Tooltip>
                     )}
+                    {/* Audit Icon for Roller PDI */}
+                    {row.activity === 'Roller PDI' && (
+                      <Tooltip title={row.auditStatus === 'Saved' ? "Audit Completed" : "Perform Audit"}>
+                        <IconButton
+                          size="small"
+                          color={row.auditStatus === 'Saved' ? "success" : "error"}
+                          onClick={() => { setSelectedAuditRecord(row); setOpenAudit(true); }}
+                        >
+                          <FactCheckIcon />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.date?.seconds ? format(new Date(row.date.seconds * 1000), 'dd/MM/yyyy') : '-'}</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.activity}</TableCell>
@@ -387,6 +403,13 @@ export default function RollerDetails() {
         open={openForm}
         onClose={() => { setOpenForm(false); setRecordToEdit(null); }}
         initialData={recordToEdit}
+        rollerId={id}
+      />
+
+      <AuditForm
+        open={openAudit}
+        onClose={() => { setOpenAudit(false); setSelectedAuditRecord(null); }}
+        recordId={selectedAuditRecord?.id}
         rollerId={id}
       />
     </Container>
