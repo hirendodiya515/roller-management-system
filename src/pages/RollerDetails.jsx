@@ -27,11 +27,13 @@ import EditIcon from '@mui/icons-material/Edit';
 import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 import { doc, getDoc, collection, onSnapshot, query, orderBy, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import RecordForm from '../components/RecordForm';
 import AuditForm from '../components/AuditForm';
+import JobCardForm from '../components/JobCardForm';
 import { format } from 'date-fns';
 
 // Gradient Presets
@@ -54,6 +56,8 @@ export default function RollerDetails() {
   const [openAudit, setOpenAudit] = useState(false);
   const [selectedAuditRecord, setSelectedAuditRecord] = useState(null);
   const [customFields, setCustomFields] = useState([]);
+  const [openJobCard, setOpenJobCard] = useState(false);
+  const [selectedJobCardRecord, setSelectedJobCardRecord] = useState(null);
   const [selectedActivity, setSelectedActivity] = useState(null);
   const { userRole, currentUser } = useAuth();
 
@@ -380,6 +384,18 @@ export default function RollerDetails() {
                         </IconButton>
                       </Tooltip>
                     )}
+                    {/* Job Card Icon for Roller sent */}
+                    {row.activity === 'Roller sent' && (
+                      <Tooltip title={row.jobCardStatus === 'Saved' ? "Job Card Completed" : "Create Job Card"}>
+                        <IconButton
+                          size="small"
+                          color={row.jobCardStatus === 'Saved' ? "success" : "error"}
+                          onClick={() => { setSelectedJobCardRecord(row); setOpenJobCard(true); }}
+                        >
+                          <AssignmentIcon />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                   </TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.date?.seconds ? format(new Date(row.date.seconds * 1000), 'dd/MM/yyyy') : '-'}</TableCell>
                   <TableCell sx={{ whiteSpace: 'nowrap' }}>{row.activity}</TableCell>
@@ -410,6 +426,13 @@ export default function RollerDetails() {
         open={openAudit}
         onClose={() => { setOpenAudit(false); setSelectedAuditRecord(null); }}
         recordId={selectedAuditRecord?.id}
+        rollerId={id}
+      />
+
+      <JobCardForm
+        open={openJobCard}
+        onClose={() => { setOpenJobCard(false); setSelectedJobCardRecord(null); }}
+        recordId={selectedJobCardRecord?.id}
         rollerId={id}
       />
     </Container>

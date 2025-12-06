@@ -11,6 +11,7 @@ import RollerList from './pages/RollerList';     // <-- The Renamed List Page
 import RollerDetails from './pages/RollerDetails';
 import Analysis from './pages/Analysis';
 import PDIReports from './pages/PDIReports';
+import JobCards from './pages/JobCards';
 import Settings from './pages/Settings';
 import ProtectedRoute from './components/AuthRoute';
 import Layout from './components/Layout';
@@ -34,6 +35,7 @@ function App() {
                 <Route path="/analysis" element={<Analysis />} />        {/* Analysis Page */}
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/pdi-reports" element={<PDIReports />} />
+                <Route path="/job-cards" element={<JobCards />} />
                 <Route path="/help" element={<Help />} />
               </Route>
             </Routes>
