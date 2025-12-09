@@ -16,6 +16,7 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import HelpIcon from '@mui/icons-material/Help';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 import AssignmentIcon from '@mui/icons-material/Assignment';
+import RuleIcon from '@mui/icons-material/Rule';
 
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../config/firebase';
@@ -43,6 +44,7 @@ export default function Layout() {
     { text: 'Analysis', icon: <AssessmentIcon />, path: '/analysis' },
     { text: 'PDI Report', icon: <FactCheckIcon />, path: '/pdi-reports' },
     { text: 'Job Cards', icon: <AssignmentIcon />, path: '/job-cards' },
+    { text: 'Approvals', icon: <RuleIcon />, path: '/approvals' },
     { text: 'Help', icon: <HelpIcon />, path: '/help' },
   ];
 
