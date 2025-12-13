@@ -288,7 +288,8 @@ export default function Settings() {
   // Alert Config State
   const [alertConfig, setAlertConfig] = useState({
     productionEndDelay: { enabled: false, days: 5 },
-    rollerSentDelay: { enabled: false, days: 5 }
+    rollerSentDelay: { enabled: false, days: 5 },
+    readyToUseAlert: { enabled: false, minimum: 3 }
   });
   const [emailJsConfig, setEmailJsConfig] = useState({
     serviceId: '',
@@ -733,6 +734,39 @@ export default function Settings() {
                     value={alertConfig.rollerSentDelay?.days || 5}
                     onChange={(e) => handleAlertConfigChange('rollerSentDelay', 'days', parseInt(e.target.value) || 0)}
                     disabled={!alertConfig.rollerSentDelay?.enabled}
+                  />
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Divider />
+                </Grid>
+
+                <Grid item xs={12} sm={8}>
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    Ready to Use Stock Low
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Alert if "Ready to Use" stock for ANY line falls below X quantity.
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={4} display="flex" alignItems="center" gap={2}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={alertConfig.readyToUseAlert?.enabled || false}
+                        onChange={(e) => handleAlertConfigChange('readyToUseAlert', 'enabled', e.target.checked)}
+                      />
+                    }
+                    label="Enable"
+                  />
+                  <TextField
+                    type="number"
+                    size="small"
+                    label="Min Qty"
+                    sx={{ width: 80 }}
+                    value={alertConfig.readyToUseAlert?.minimum || 3}
+                    onChange={(e) => handleAlertConfigChange('readyToUseAlert', 'minimum', parseInt(e.target.value) || 0)}
+                    disabled={!alertConfig.readyToUseAlert?.enabled}
                   />
                 </Grid>
               </Grid>
