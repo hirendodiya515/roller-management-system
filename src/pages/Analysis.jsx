@@ -37,6 +37,16 @@ import { DatePicker } from '@mui/x-date-pickers';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ClearIcon from '@mui/icons-material/Clear';
 import AssessmentIcon from '@mui/icons-material/Assessment';
+import { 
+    addDays, 
+    startOfWeek, 
+    endOfWeek, 
+    isBefore, 
+    isAfter, 
+    isWithinInterval, 
+    format 
+} from 'date-fns';
+import { fetchAlertConfig } from '../services/alertService';
 
 export default function Analysis() {
     const [loading, setLoading] = useState(true);
@@ -45,6 +55,7 @@ export default function Analysis() {
     const [monthlyData, setMonthlyData] = useState([]);
     const [reasonData, setReasonData] = useState([]);
     const [turnaroundData, setTurnaroundData] = useState([]);
+    const [expectedReceivingData, setExpectedReceivingData] = useState([]);
     const [selectedLine, setSelectedLine] = useState('All');
 
     const lines = ['All', 'SG#1', 'SG#2', 'SG#3.1', 'SG#3.2'];
@@ -272,6 +283,84 @@ export default function Analysis() {
 
         const statusChartData = Object.entries(statusMap).map(([name, value]) => ({ name, value }));
         setStatusData(statusChartData);
+
+        // 5. Expected Roller Receiving (Week-wise)
+        processExpectedReceiving(filteredRecords);
+    };
+
+    const processExpectedReceiving = async (filteredRecords) => {
+        try {
+            const alertConfig = await fetchAlertConfig();
+            const returnDays = alertConfig?.rollerSentDelay?.days || 5;
+
+            const now = new Date();
+            const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 });
+            const currentWeekEnd = endOfWeek(now, { weekStartsOn: 1 });
+
+            const nextWeekStart = addDays(currentWeekStart, 7);
+            const nextWeekEnd = endOfWeek(nextWeekStart, { weekStartsOn: 1 });
+
+            const week2Start = addDays(nextWeekStart, 7);
+            const week2End = endOfWeek(week2Start, { weekStartsOn: 1 });
+
+            const week3Start = addDays(week2Start, 7);
+            const week3End = endOfWeek(week3Start, { weekStartsOn: 1 });
+
+            const categories = {
+                'Previous Week(s)': 0,
+                'Current Week': 0,
+                'Next Week': 0,
+                'After 2 Weeks': 0,
+                'After 3 Weeks': 0,
+                'Later': 0
+            };
+
+            const rollerSentRecords = filteredRecords.filter(r =>
+                r.activity === 'Roller sent' && r.status === 'Approved'
+            );
+
+            // We only care about rollers that are CURRENTLY "Roller sent" 
+            // and haven't been received yet?
+            // The request says "calculated based on {roller sent date} from history selected date".
+            // If the user selects a date range in the past, they might want to see 
+            // what was expected THEN. However, "Previous Week, Current Week" etc usually 
+            // imply a forward-looking schedule from NOW.
+            
+            // Let's filter rollers that are currently in 'Roller sent' status 
+            // IF they fall within the selected date range of being SENT.
+            
+            rollerSentRecords.forEach(record => {
+                // Check if this roller is still "Sent" (not yet received)
+                const currentRoller = rollers.find(r => r.id === record.rollerId);
+                if (currentRoller && currentRoller.currentStatus === 'Roller sent') {
+                    const sentDate = record.date?.toDate ? record.date.toDate() : new Date(record.date);
+                    const expectedDate = addDays(sentDate, returnDays);
+
+                    if (isBefore(expectedDate, currentWeekStart)) {
+                        categories['Previous Week(s)']++;
+                    } else if (isWithinInterval(expectedDate, { start: currentWeekStart, end: currentWeekEnd })) {
+                        categories['Current Week']++;
+                    } else if (isWithinInterval(expectedDate, { start: nextWeekStart, end: nextWeekEnd })) {
+                        categories['Next Week']++;
+                    } else if (isWithinInterval(expectedDate, { start: week2Start, end: week2End })) {
+                        categories['After 2 Weeks']++;
+                    } else if (isWithinInterval(expectedDate, { start: week3Start, end: week3End })) {
+                        categories['After 3 Weeks']++;
+                    } else {
+                        categories['Later']++;
+                    }
+                }
+            });
+
+            const expectedDataArray = Object.entries(categories).map(([name, count]) => ({
+                name,
+                count
+            }));
+
+            setExpectedReceivingData(expectedDataArray);
+        } catch (error) {
+            console.error("Error processing expected receiving data:", error);
+        }
     };
 
     const exportLineWiseRollers = () => {
@@ -536,6 +625,37 @@ export default function Analysis() {
                                     <Tooltip />
                                     <Legend />
                                     <Bar dataKey="avgDays" fill="#66BB6A" name="Avg Days" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+                </Grid>
+
+                {/* Expected Roller Receiving */}
+                <Grid size={{ xs: 12 }}>
+                    <Card elevation={2} sx={{ borderRadius: 3 }}>
+                        <CardContent>
+                            <Typography variant="h6" fontWeight="bold" gutterBottom>
+                                Expected Roller Receiving (Week-wise)
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" mb={2}>
+                                Based on Sent Date + Vendor Return Days from Alert Config
+                            </Typography>
+                            <ResponsiveContainer width="100%" height={350}>
+                                <BarChart data={expectedReceivingData} margin={{ bottom: 20 }}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="name" />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Legend />
+                                    <Bar dataKey="count" fill="#8884d8" name="Expected Rollers">
+                                        {expectedReceivingData.map((entry, index) => (
+                                            <Cell 
+                                                key={`cell-${index}`} 
+                                                fill={entry.name === 'Previous Week(s)' ? '#EF5350' : '#42A5F5'} 
+                                            />
+                                        ))}
+                                    </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         </CardContent>

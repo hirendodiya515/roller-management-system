@@ -15,7 +15,8 @@ import {
   InputAdornment,
   Alert,
   Skeleton,
-  Fab
+  Fab,
+  Paper
 } from '@mui/material';
 
 // Icons
@@ -39,9 +40,12 @@ const STATUS_COLORS = {
   Rejected: 'error'
 };
 
+const TOTAL_CAPACITY = 139;
+
 export default function RollerList() {
   const [rollers, setRollers] = useState([]);
   const [rollerStatuses, setRollerStatuses] = useState({}); // Store calculated statuses
+  const [rollerDesigns, setRollerDesigns] = useState({}); // Store calculated designs
   const [openForm, setOpenForm] = useState(false);
   const [editData, setEditData] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -55,6 +59,7 @@ export default function RollerList() {
   const lineFilter = searchParams.get('line');
   const positionFilter = searchParams.get('position');
   const statusFilter = searchParams.get('status');
+  const designFilter = searchParams.get('design');
 
   useEffect(() => {
     const q = query(collection(db, 'rollers'), orderBy('createdAt', 'desc'));
@@ -95,9 +100,17 @@ export default function RollerList() {
               currentStatus = 'Sent to Vendor';
             }
 
-            return { id: roller.id, status: currentStatus };
+            let currentDesign = '-';
+            // Extract design
+            const allKeys = Object.keys(latestRecord);
+            const designKey = allKeys.find(key => key.toLowerCase().includes('design'));
+            if(designKey && latestRecord[designKey]) {
+                currentDesign = latestRecord[designKey];
+            }
+
+            return { id: roller.id, status: currentStatus, design: currentDesign };
           }
-          return { id: roller.id, status: 'No Activity' };
+          return { id: roller.id, status: 'No Activity', design: '-' };
         } catch (error) {
           console.error(`Error fetching records for roller ${roller.id}:`, error);
           return { id: roller.id, status: 'No Activity' };
@@ -106,11 +119,14 @@ export default function RollerList() {
 
       const results = await Promise.all(statusPromises);
       const statuses = {};
+      const designs = {};
       results.forEach(r => {
         statuses[r.id] = r.status;
+        if(r.design) designs[r.id] = r.design;
       });
 
       setRollerStatuses(statuses);
+      setRollerDesigns(designs);
       setLoading(false);
     });
     return () => unsubscribe();
@@ -157,6 +173,7 @@ export default function RollerList() {
       let matchesLine = true;
       let matchesPosition = true;
       let matchesStatus = true;
+      let matchesDesign = true;
 
       if (lineFilter) {
         // For SG#3, match both SG#3.1 and SG#3.2
@@ -177,11 +194,16 @@ export default function RollerList() {
         matchesStatus = rollerCurrentStatus === statusFilter;
       }
 
-      return matchesSearch && matchesLine && matchesPosition && matchesStatus;
-    });
-  }, [rollers, rollerStatuses, searchTerm, lineFilter, positionFilter, statusFilter]);
+      if (designFilter) {
+          const rollerDesign = rollerDesigns[roller.id] || '-';
+          matchesDesign = rollerDesign === designFilter;
+      }
 
-  const hasActiveFilters = lineFilter || positionFilter || statusFilter;
+      return matchesSearch && matchesLine && matchesPosition && matchesStatus && matchesDesign;
+    });
+  }, [rollers, rollerStatuses, rollerDesigns, searchTerm, lineFilter, positionFilter, statusFilter, designFilter]);
+
+  const hasActiveFilters = lineFilter || positionFilter || statusFilter || designFilter;
 
   const renderSkeletonCard = () => (
     <Grid item xs={12} sm={6} md={4} sx={{ display: 'flex' }}>
@@ -209,6 +231,30 @@ export default function RollerList() {
         <Typography variant="h4" fontWeight="bold" color="primary">
           Roller Inventory
         </Typography>
+
+        <Box display="flex" alignItems="center" gap={2}>
+          <Typography variant="subtitle1" fontWeight="600" sx={{ color: 'text.secondary' }}>
+            Total rollers in system <Box component="span" color="primary.main">{rollers.length}</Box>/{TOTAL_CAPACITY}
+          </Typography>
+          <Paper
+            elevation={0}
+            sx={{
+              width: 50,
+              height: 40,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              bgcolor: 'primary.main',
+              color: 'white',
+              borderRadius: 2,
+              fontWeight: 'bold',
+              fontSize: '1.0rem',
+              boxShadow: '0 4px 12px rgba(21, 101, 192, 0.2)'
+            }}
+          >
+            {Math.round((rollers.length / TOTAL_CAPACITY) * 100)}%
+          </Paper>
+        </Box>
       </Box>
 
       {/* Search and Filters - Simplified */}
@@ -245,6 +291,7 @@ export default function RollerList() {
           {lineFilter && ` Line: ${lineFilter}`}
           {positionFilter && ` | Position: ${positionFilter}`}
           {statusFilter && ` | Status: ${statusFilter}`}
+          {designFilter && ` | Design: ${designFilter}`}
         </Alert>
       )}
 

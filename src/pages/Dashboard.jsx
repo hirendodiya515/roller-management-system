@@ -22,9 +22,12 @@ import AnalyticsIcon from '@mui/icons-material/Analytics';
 import VerticalAlignTopIcon from '@mui/icons-material/VerticalAlignTop';
 import VerticalAlignBottomIcon from '@mui/icons-material/VerticalAlignBottom';
 import ProductionQuantityLimitsIcon from '@mui/icons-material/ProductionQuantityLimits';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import { FormControl, InputLabel, Select, MenuItem, Avatar } from '@mui/material';
 
 const LINES = ['SG#1', 'SG#2', 'SG#3']; // For Top/Bottom summary
 const PRODUCTION_LINES = ['SG#1', 'SG#2', 'SG#3.1', 'SG#3.2']; // For Production End cards
+const TOTAL_CAPACITY = 139;
 
 // Status colors matching RollerDetails
 const STATUS_COLORS = {
@@ -39,6 +42,8 @@ export default function Dashboard() {
   const [rollers, setRollers] = useState([]);
   const [records, setRecords] = useState({}); // Stores { status, record }
   const [loading, setLoading] = useState(true);
+  const [selectedDesign, setSelectedDesign] = useState('');
+  const [availableDesigns, setAvailableDesigns] = useState([]);
   const navigate = useNavigate();
 
   // Fetch all rollers and their latest approved records
@@ -96,6 +101,20 @@ export default function Dashboard() {
       });
 
       setRecords(recordsData);
+
+      // Extract available designs
+      const designs = new Set();
+      Object.values(recordsData).forEach(item => {
+         const record = item.record;
+         if (record) {
+             const key = Object.keys(record).find(k => k.toLowerCase().includes('design'));
+             if (key && record[key]) {
+                 designs.add(record[key]);
+             }
+         }
+      });
+      setAvailableDesigns(Array.from(designs).sort());
+
       setLoading(false);
     });
 
@@ -405,11 +424,37 @@ export default function Dashboard() {
 
   return (
     <Box>
-      <Box display="flex" alignItems="center" mb={4}>
-        <AnalyticsIcon color="primary" sx={{ fontSize: 40, mr: 2 }} />
-        <Typography variant="h5" fontWeight="bold" color="primary">
-          Roller Stock Overview
-        </Typography>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+        <Box display="flex" alignItems="center">
+          <AnalyticsIcon color="primary" sx={{ fontSize: 40, mr: 2 }} />
+          <Typography variant="h5" fontWeight="bold" color="primary">
+            Roller Stock Overview
+          </Typography>
+        </Box>
+        
+        <Box display="flex" alignItems="center" gap={2}>
+          <Typography variant="subtitle1" fontWeight="600" sx={{ color: 'text.secondary' }}>
+            Total rollers in system <Box component="span" color="primary.main">{rollers.length}</Box>/{TOTAL_CAPACITY}
+          </Typography>
+          <Paper
+            elevation={0}
+            sx={{
+              width: 50,
+              height: 40,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              bgcolor: 'primary.main',
+              color: 'white',
+              borderRadius: 2,
+              fontWeight: 'bold',
+              fontSize: '1.0rem',
+              boxShadow: '0 4px 12px rgba(21, 101, 192, 0.2)'
+            }}
+          >
+            {Math.round((rollers.length / TOTAL_CAPACITY) * 100)}%
+          </Paper>
+        </Box>
       </Box>
 
       <Grid container spacing={4}>
@@ -518,6 +563,106 @@ export default function Dashboard() {
             PRODUCTION_LINES.map(line => renderProductionEndCard(line))
           )}
         </Grid>
+      </Paper>
+
+      {/* Design-wise Roller Count Section */}
+      <Paper sx={{ p: 3, mt: 4, borderRadius: 4, bgcolor: 'white', border: '1px solid #e0e0e0', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
+         <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+           <Box display="flex" alignItems="center">
+             <AssignmentIcon color="primary" sx={{ mr: 1, fontSize: 30 }} />
+             <Typography variant="h5" fontWeight="bold" color="primary">
+               Design-wise Roller Count
+             </Typography>
+           </Box>
+           <FormControl size="small" sx={{ minWidth: 200 }}>
+             <InputLabel id="design-select-label">Select Design</InputLabel>
+             <Select
+               labelId="design-select-label"
+               value={selectedDesign}
+               label="Select Design"
+               onChange={(e) => setSelectedDesign(e.target.value)}
+               sx={{ borderRadius: 2 }}
+             >
+               <MenuItem value="">
+                 <em>None</em>
+               </MenuItem>
+               {availableDesigns.map((design) => (
+                 <MenuItem key={design} value={design}>
+                   {design}
+                 </MenuItem>
+               ))}
+             </Select>
+           </FormControl>
+         </Box>
+
+         {selectedDesign ? (
+           <Grid container spacing={3}>
+             {LINES.map((line) => {
+               // Calculate count for this line and selected design
+               let lineRollers;
+               if (line === 'SG#3') {
+                 lineRollers = rollers.filter(r =>
+                   (r.line === 'SG#3.1' || r.line === 'SG#3.2')
+                 );
+               } else {
+                 lineRollers = rollers.filter(r => r.line === line);
+               }
+
+               const count = lineRollers.filter(r => {
+                 const record = records[r.id]?.record;
+                 const design = getDesignFromRecord(record);
+                 return design === selectedDesign;
+               }).length;
+
+               return (
+                 <Grid item xs={12} sm={6} md={4} key={line}>
+                   <Card
+                      elevation={0}
+                      sx={{
+                        borderRadius: 3,
+                        border: '1px solid',
+                        borderColor: count > 0 ? 'primary.light' : '#e0e0e0',
+                        bgcolor: count > 0 ? '#F0F7FF' : '#fafafa',
+                        cursor: count > 0 ? 'pointer' : 'default',
+                        transition: 'all 0.2s ease',
+                        '&:hover': {
+                           transform: count > 0 ? 'translateY(-2px)' : 'none',
+                           boxShadow: count > 0 ? '0 12px 24px -10px rgba(0, 0, 0, 0.2)' : 'none',
+                           borderColor: count > 0 ? 'primary.main' : '#e0e0e0'
+                        }
+                      }}
+                       onClick={() => {
+                         if (count > 0) {
+                           navigate(`/rollers?line=${encodeURIComponent(line)}&design=${encodeURIComponent(selectedDesign)}`);
+                         }
+                       }}
+                   >
+                     <CardContent sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, '&:last-child': { pb: 2 } }}>
+                       <Typography variant="h6" fontWeight="bold" color={count > 0 ? 'primary.main' : 'text.disabled'}>
+                         {line}
+                       </Typography>
+                       <Avatar 
+                        sx={{ 
+                          bgcolor: count > 0 ? 'primary.main' : '#bdbdbd', 
+                          fontWeight: 'bold',
+                          width: 36,
+                          height: 36,
+                          fontSize: '1rem'
+                        }}
+                       >
+                         {count}
+                       </Avatar>
+                     </CardContent>
+                   </Card>
+                 </Grid>
+               );
+             })}
+           </Grid>
+         ) : (
+           <Box textAlign="center" py={4} sx={{ bgcolor: '#fafafa', borderRadius: 3, border: '1px dashed #bdbdbd' }}>
+             <Typography color="text.secondary">Please select a design to view line-wise counts</Typography>
+           </Box>
+         )}
       </Paper>
 
       {/* Recent Activity */}
