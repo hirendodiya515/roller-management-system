@@ -191,17 +191,26 @@ async function checkAndTriggerAlerts(config, emailJsConfig) {
                     }
                 }
 
-                // Check Delay in Receive (Status: Roller sent)
-                if (
-                    config.rollerSentDelay?.enabled &&
-                    roller.currentStatus === 'Roller sent' &&
-                    diffDays > config.rollerSentDelay.days
-                ) {
-                    const shouldSend = await checkLastAlertDate(roller.id, roller.currentStatus);
-                    if (shouldSend) {
-                        delayedReceiveRollers.push({ ...roller, diffDays, recordDate });
-                    }
-                }
+                        // Check Delay in Receive (Status: Roller sent)
+                        if (
+                            config.rollerSentDelay?.enabled &&
+                            roller.currentStatus === 'Roller sent' &&
+                            diffDays > config.rollerSentDelay.days
+                        ) {
+                            const shouldSend = await checkLastAlertDate(roller.id, roller.currentStatus);
+                            if (shouldSend) {
+                                // Extract Vendor Name from latest record
+                                const allKeys = Object.keys(latestRecord);
+                                const vendorKey = allKeys.find(key => 
+                                    key.toLowerCase().includes('vendor') || 
+                                    key.toLowerCase().includes('supplier') ||
+                                    key.toLowerCase().includes('party')
+                                );
+                                const vendorName = vendorKey && latestRecord[vendorKey] ? String(latestRecord[vendorKey]).trim() : '-';
+                                
+                                delayedReceiveRollers.push({ ...roller, diffDays, recordDate, vendorName });
+                            }
+                        }
             } catch (error) {
                 console.error(`Error processing roller ${roller.id}:`, error);
                 continue;
@@ -319,6 +328,8 @@ async function sendBulkAlertEmail(rollers, alertType, emailJsConfig) {
 
 function generateBulkEmailHtml(rollers, alertType) {
     const color = '#d32f2f';
+    const isReceiveDelay = alertType === "Delayed in receive roller from vendor";
+
     const rowRows = rollers.map(roller => {
         const date = roller.recordDate ? roller.recordDate.toLocaleDateString() : 'N/A';
         return `
@@ -329,6 +340,7 @@ function generateBulkEmailHtml(rollers, alertType) {
             <td style="padding: 10px; border: 1px solid #ddd;">${roller.line || 'N/A'}</td>
             <td style="padding: 10px; border: 1px solid #ddd;">${roller.position || 'N/A'}</td>
             <td style="padding: 10px; border: 1px solid #ddd;">${date}</td>
+            ${isReceiveDelay ? `<td style="padding: 10px; border: 1px solid #ddd;">${roller.vendorName || '-'}</td>` : ''}
         </tr>
         `;
     }).join('');
@@ -354,6 +366,7 @@ function generateBulkEmailHtml(rollers, alertType) {
               <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Line</th>
               <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Position</th>
               <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Date</th>
+              ${isReceiveDelay ? '<th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Vendor</th>' : ''}
             </tr>
           </thead>
           <tbody>

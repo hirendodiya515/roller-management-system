@@ -56,6 +56,7 @@ export default function Analysis() {
     const [reasonData, setReasonData] = useState([]);
     const [turnaroundData, setTurnaroundData] = useState([]);
     const [expectedReceivingData, setExpectedReceivingData] = useState([]);
+    const [vendorDistributionData, setVendorDistributionData] = useState([]);
     const [selectedLine, setSelectedLine] = useState('All');
 
     const lines = ['All', 'SG#1', 'SG#2', 'SG#3.1', 'SG#3.2'];
@@ -286,6 +287,42 @@ export default function Analysis() {
 
         // 5. Expected Roller Receiving (Week-wise)
         processExpectedReceiving(filteredRecords);
+
+        // 6. Vendor-wise Distribution (Latest status)
+        processVendorDistribution();
+    };
+
+    const processVendorDistribution = () => {
+        const vendorMap = {};
+
+        rollers.forEach(roller => {
+            // Find the latest approved record for this roller
+            // allRecords is grouped by roller from fetchData, so we can find the first one
+            const latestRecord = allRecords.find(r => r.rollerId === roller.id && r.status === 'Approved');
+
+            if (latestRecord && latestRecord.activity === 'Roller sent') {
+                const allKeys = Object.keys(latestRecord);
+                const vendorKey = allKeys.find(key => 
+                    key.toLowerCase().includes('vendor') || 
+                    key.toLowerCase().includes('supplier') ||
+                    key.toLowerCase().includes('party')
+                );
+
+                const vendor = vendorKey && latestRecord[vendorKey] 
+                    ? String(latestRecord[vendorKey]).trim() 
+                    : 'Unknown Vendor';
+
+                if (vendor) {
+                    vendorMap[vendor] = (vendorMap[vendor] || 0) + 1;
+                }
+            }
+        });
+
+        const vendorArray = Object.entries(vendorMap)
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count);
+
+        setVendorDistributionData(vendorArray);
     };
 
     const processExpectedReceiving = async (filteredRecords) => {
@@ -632,8 +669,8 @@ export default function Analysis() {
                 </Grid>
 
                 {/* Expected Roller Receiving */}
-                <Grid size={{ xs: 12 }}>
-                    <Card elevation={2} sx={{ borderRadius: 3 }}>
+                <Grid size={{ xs: 12, md: 6 }}>
+                    <Card elevation={2} sx={{ borderRadius: 3, height: '100%' }}>
                         <CardContent>
                             <Typography variant="h6" fontWeight="bold" gutterBottom>
                                 Expected Roller Receiving (Week-wise)
@@ -656,6 +693,36 @@ export default function Analysis() {
                                             />
                                         ))}
                                     </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+                </Grid>
+
+                {/* Vendor Distribution */}
+                <Grid size={{ xs: 12, md: 6 }}>
+                    <Card elevation={2} sx={{ borderRadius: 3, height: '100%' }}>
+                        <CardContent>
+                            <Typography variant="h6" fontWeight="bold" gutterBottom>
+                                Rollers with Vendors
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" mb={2}>
+                                Distribution of rollers currently sent to vendors
+                            </Typography>
+                            <ResponsiveContainer width="100%" height={350}>
+                                <BarChart data={vendorDistributionData} margin={{ bottom: 20 }}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis 
+                                        dataKey="name" 
+                                        angle={-45}
+                                        textAnchor="end"
+                                        height={100}
+                                        interval={0}
+                                    />
+                                    <YAxis />
+                                    <Tooltip />
+                                    <Legend />
+                                    <Bar dataKey="count" fill="#FFA726" name="Rollers Count" />
                                 </BarChart>
                             </ResponsiveContainer>
                         </CardContent>
