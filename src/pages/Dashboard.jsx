@@ -35,6 +35,7 @@ const STATUS_COLORS = {
   'Sent to Vendor': '#FDD835', // Yellow
   'To be sent': '#FF9800',        // Orange
   'Ready to Use': '#66BB6A',      // Green
+  'Scrap': '#EF5350',             // Red
   'No Activity': '#9E9E9E'        // Grey
 };
 
@@ -82,6 +83,8 @@ export default function Dashboard() {
               currentStatus = 'To be sent';
             } else if (activityType === 'Roller sent') {
               currentStatus = 'Sent to Vendor';
+            } else if (activityType === 'Scrap') {
+              currentStatus = 'Scrap';
             }
 
             return { id: roller.id, status: currentStatus, record: latestRecord };
@@ -148,7 +151,8 @@ export default function Dashboard() {
       'Running': 0,
       'Sent to Vendor': 0,
       'To be sent': 0,
-      'Ready to Use': 0
+      'Ready to Use': 0,
+      'Scrap': 0
     };
 
     lineRollers.forEach(roller => {
