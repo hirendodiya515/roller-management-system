@@ -109,6 +109,41 @@ export default function Approvals() {
         approvedAt: serverTimestamp(),
         approvalInfo: isApprove ? 'Approved via Dashboard' : 'Rejected via Dashboard' 
       });
+
+      // If approving, update the parent roller's currentStatus
+      if (isApprove) {
+        try {
+          const rollerRef = doc(db, 'rollers', record.rollerId);
+          
+          // Calculate the proper status from activity type
+          let calculatedStatus = record.activity;
+          if (record.activity === 'Roller Received') {
+            // Check for ready_to_use field (case insensitive search)
+            const allKeys = Object.keys(record);
+            const readyToUseKey = allKeys.find(key => key.toLowerCase().includes('ready_to_use'));
+            const readyValue = readyToUseKey ? record[readyToUseKey] : undefined;
+            calculatedStatus = readyValue === 'Yes' ? 'Ready to Use' : 'Sent to Vendor';
+          } else if (record.activity === 'Production Start') {
+            calculatedStatus = 'Running';
+          } else if (record.activity === 'Production End') {
+            calculatedStatus = 'To be sent';
+          } else if (record.activity === 'Roller sent') {
+            calculatedStatus = 'Sent to Vendor';
+          } else if (record.activity === 'Scrap') {
+            calculatedStatus = 'Scrap';
+          } else if (record.activity === 'Roller PDI') {
+            calculatedStatus = 'Roller PDI';
+          }
+
+          await updateDoc(rollerRef, {
+            currentStatus: calculatedStatus,
+            lastUpdated: serverTimestamp()
+          });
+        } catch (error) {
+          console.error("Error updating roller status:", error);
+          // Don't fail the approval if roller update fails
+        }
+      }
       
       // Update local state to remove item instantly
       setRecords(prev => prev.filter(r => r.id !== record.id));

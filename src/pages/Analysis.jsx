@@ -352,39 +352,60 @@ export default function Analysis() {
                 'Later': 0
             };
 
-            const rollerSentRecords = filteredRecords.filter(r =>
-                r.activity === 'Roller sent' && r.status === 'Approved'
-            );
+            // Iterate over ALL rollers to find their current status
+            // This ensures we don't count the same roller multiple times if it has multiple history records
+            // and ensures consistency with Dashboard logic
+            rollers.forEach(roller => {
+                // Find latest approved record for this roller from allRecords
+                const rollerRecords = allRecords.filter(r => r.rollerId === roller.id && r.status === 'Approved');
+                
+                if (rollerRecords.length > 0) {
+                    // Sort to get latest
+                    rollerRecords.sort((a, b) => {
+                        const dateA = a.date?.toDate ? a.date.toDate() : new Date(a.date);
+                        const dateB = b.date?.toDate ? b.date.toDate() : new Date(b.date);
+                        return dateB - dateA;
+                    });
 
-            // We only care about rollers that are CURRENTLY "Roller sent" 
-            // and haven't been received yet?
-            // The request says "calculated based on {roller sent date} from history selected date".
-            // If the user selects a date range in the past, they might want to see 
-            // what was expected THEN. However, "Previous Week, Current Week" etc usually 
-            // imply a forward-looking schedule from NOW.
-            
-            // Let's filter rollers that are currently in 'Roller sent' status 
-            // IF they fall within the selected date range of being SENT.
-            
-            rollerSentRecords.forEach(record => {
-                // Check if this roller is still "Sent" (not yet received)
-                const currentRoller = rollers.find(r => r.id === record.rollerId);
-                if (currentRoller && currentRoller.currentStatus === 'Roller sent') {
-                    const sentDate = record.date?.toDate ? record.date.toDate() : new Date(record.date);
-                    const expectedDate = addDays(sentDate, returnDays);
+                    const latestRecord = rollerRecords[0];
+                    const activityType = latestRecord.activity;
+                    let currentStatus = 'No Activity';
 
-                    if (isBefore(expectedDate, currentWeekStart)) {
-                        categories['Previous Week(s)']++;
-                    } else if (isWithinInterval(expectedDate, { start: currentWeekStart, end: currentWeekEnd })) {
-                        categories['Current Week']++;
-                    } else if (isWithinInterval(expectedDate, { start: nextWeekStart, end: nextWeekEnd })) {
-                        categories['Next Week']++;
-                    } else if (isWithinInterval(expectedDate, { start: week2Start, end: week2End })) {
-                        categories['After 2 Weeks']++;
-                    } else if (isWithinInterval(expectedDate, { start: week3Start, end: week3End })) {
-                        categories['After 3 Weeks']++;
-                    } else {
-                        categories['Later']++;
+                    // Replicating Dashboard Logic for Status
+                    if (activityType === 'Roller Received') {
+                        const allKeys = Object.keys(latestRecord);
+                        const readyToUseKey = allKeys.find(key => key.toLowerCase().startsWith('ready_to_use'));
+                        const readyValue = readyToUseKey ? latestRecord[readyToUseKey] : undefined;
+
+                        currentStatus = readyValue === 'Yes' ? 'Ready to Use' : 'Sent to Vendor';
+                    } else if (activityType === 'Production Start') {
+                        currentStatus = 'Running';
+                    } else if (activityType === 'Production End') {
+                        currentStatus = 'To be sent';
+                    } else if (activityType === 'Roller sent') {
+                        currentStatus = 'Sent to Vendor';
+                    } else if (activityType === 'Scrap') {
+                        currentStatus = 'Scrap';
+                    }
+
+                    // Only count if currently Sent to Vendor
+                    if (currentStatus === 'Sent to Vendor') {
+                        const sentDate = latestRecord.date?.toDate ? latestRecord.date.toDate() : new Date(latestRecord.date);
+                        const expectedDate = addDays(sentDate, returnDays);
+
+                        if (isBefore(expectedDate, currentWeekStart)) {
+                            categories['Previous Week(s)']++;
+                        } else if (isWithinInterval(expectedDate, { start: currentWeekStart, end: currentWeekEnd })) {
+                            categories['Current Week']++;
+                        } else if (isWithinInterval(expectedDate, { start: nextWeekStart, end: nextWeekEnd })) {
+                            categories['Next Week']++;
+                        } else if (isWithinInterval(expectedDate, { start: week2Start, end: week2End })) {
+                            categories['After 2 Weeks']++;
+                        } else if (isWithinInterval(expectedDate, { start: week3Start, end: week3End })) {
+                            categories['After 3 Weeks']++;
+                        } else {
+                            categories['Later']++;
+                        }
                     }
                 }
             });

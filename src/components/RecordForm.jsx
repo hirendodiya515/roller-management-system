@@ -156,6 +156,31 @@ export default function RecordForm({ open, onClose, initialData, rollerId }) {
     }
   }, [initialData, open, reset, setValue]);
 
+  // Helper function to calculate status from activity type
+  // This matches the logic in Dashboard.jsx
+  const calculateStatusFromActivity = (activityType, formData) => {
+    if (activityType === 'Roller Received') {
+      // Check for ready_to_use field (case insensitive search)
+      const allKeys = Object.keys(formData);
+      const readyToUseKey = allKeys.find(key => key.toLowerCase().includes('ready_to_use'));
+      const readyValue = readyToUseKey ? formData[readyToUseKey] : undefined;
+      return readyValue === 'Yes' ? 'Ready to Use' : 'Sent to Vendor';
+    } else if (activityType === 'Production Start') {
+      return 'Running';
+    } else if (activityType === 'Production End') {
+      return 'To be sent';
+    } else if (activityType === 'Roller sent') {
+      return 'Sent to Vendor';
+    } else if (activityType === 'Scrap') {
+      return 'Scrap';
+    } else if (activityType === 'Roller PDI') {
+      return 'Roller PDI';
+    }
+    // Default: use activity type as-is
+    return activityType;
+  };
+
+
   const onSubmit = async (data) => {
     try {
       const payload = { ...data, createdBy: auth.currentUser.uid };
@@ -166,10 +191,10 @@ export default function RecordForm({ open, onClose, initialData, rollerId }) {
         await addDoc(collection(db, `rollers/${rollerId}/records`), payload);
 
         // Update parent roller with latest status/activity
-        // Note: This assumes the new record is the latest. 
-        // Ideally we'd check dates, but for new records it's usually true.
+        // Calculate the proper status from activity type
+        const calculatedStatus = calculateStatusFromActivity(data.activity, data);
         await updateDoc(doc(db, 'rollers', rollerId), {
-          currentStatus: data.activity,
+          currentStatus: calculatedStatus,
           lastUpdated: serverTimestamp()
         });
 
@@ -185,10 +210,11 @@ export default function RecordForm({ open, onClose, initialData, rollerId }) {
 
         await updateDoc(doc(db, `rollers/${rollerId}/records`, initialData.id), payload);
 
-        // Also update parent if editing the latest record? 
-        // For simplicity, let's update it to reflect the change.
+        // Also update parent if editing the latest record
+        // Calculate the proper status from activity type
+        const calculatedStatus = calculateStatusFromActivity(data.activity, data);
         await updateDoc(doc(db, 'rollers', rollerId), {
-          currentStatus: data.activity,
+          currentStatus: calculatedStatus,
           lastUpdated: serverTimestamp()
         });
       }

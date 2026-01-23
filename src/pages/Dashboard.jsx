@@ -70,6 +70,10 @@ export default function Dashboard() {
             const activityType = latestRecord.activity;
 
             let currentStatus = 'No Activity';
+            
+            // Find latest Production End record for date display
+            const prodEndRecord = approvedRecords.find(r => r.activity === 'Production End');
+            const productionEndDate = prodEndRecord ? prodEndRecord.date : null;
 
             if (activityType === 'Roller Received') {
               const allKeys = Object.keys(latestRecord);
@@ -87,7 +91,7 @@ export default function Dashboard() {
               currentStatus = 'Scrap';
             }
 
-            return { id: roller.id, status: currentStatus, record: latestRecord };
+            return { id: roller.id, status: currentStatus, record: latestRecord, productionEndDate };
           } else {
             return { id: roller.id, status: 'No Activity', record: null };
           }
@@ -100,7 +104,11 @@ export default function Dashboard() {
       const results = await Promise.all(recordPromises);
       const recordsData = {};
       results.forEach(r => {
-        recordsData[r.id] = { status: r.status, record: r.record };
+        recordsData[r.id] = { 
+            status: r.status, 
+            record: r.record,
+            productionEndDate: r.productionEndDate 
+        };
       });
 
       setRecords(recordsData);
@@ -329,12 +337,33 @@ export default function Dashboard() {
   };
 
   const renderProductionEndCard = (line) => {
-    // Filter rollers for this line that are in "To be sent" (Production End) status
-    const productionEndRollers = rollers.filter(r => {
+    // 1. Filter rollers for this line that are in "To be sent" OR "Sent to Vendor"
+    const candidates = rollers.filter(r => {
       const isLineMatch = r.line === line;
       const status = records[r.id]?.status;
-      return isLineMatch && status === 'To be sent';
+      return isLineMatch && (status === 'To be sent' || status === 'Sent to Vendor');
     });
+
+    // 2. Group by position and find the latest one for each position
+    const latestByPosition = {};
+
+    candidates.forEach(roller => {
+      const position = roller.position;
+      const record = records[roller.id]?.record;
+      const recordDate = record?.date?.seconds || 0;
+
+      if (!latestByPosition[position]) {
+        latestByPosition[position] = { roller, date: recordDate };
+      } else {
+        // If this one is newer, replace the existing one
+        if (recordDate > latestByPosition[position].date) {
+          latestByPosition[position] = { roller, date: recordDate };
+        }
+      }
+    });
+
+    // 3. Convert back to array
+    const productionEndRollers = Object.values(latestByPosition).map(item => item.roller);
 
     return (
       <Grid item xs={12} sm={6} md={true} sx={{ flexGrow: 1, flexBasis: 0 }} key={`prod-end-${line}`}>
@@ -369,8 +398,13 @@ export default function Dashboard() {
               <Box display="flex" flexDirection="column" gap={2}>
                 {productionEndRollers.map(roller => {
                   const record = records[roller.id]?.record;
-                  const date = record?.date?.seconds ? format(new Date(record.date.seconds * 1000), 'dd/MM/yyyy') : '-';
+                  // Use specific Production End date if available, else fallback to record date
+                  const prodEndDate = records[roller.id]?.productionEndDate;
+                  const displayDateRaw = prodEndDate || record?.date;
+                  
+                  const date = displayDateRaw?.seconds ? format(new Date(displayDateRaw.seconds * 1000), 'dd/MM/yyyy') : '-';
                   const design = getDesignFromRecord(record);
+                  const status = records[roller.id]?.status;
 
                   return (
                     <Paper
@@ -397,6 +431,9 @@ export default function Dashboard() {
                       <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
                         <strong>Design:</strong> {design}
                       </Typography>
+                      {status === 'Sent to Vendor' && (
+                         <Chip label="Sent" size="small" color="warning" variant="outlined" sx={{ mt: 1, height: 20, fontSize: '0.7rem' }} />
+                      )}
                     </Paper>
                   );
                 })}
@@ -407,6 +444,7 @@ export default function Dashboard() {
       </Grid>
     );
   };
+
 
   const renderSkeletonCard = () => (
     <Grid item xs={12} sm={6} md={4}>
