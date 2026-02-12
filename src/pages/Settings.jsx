@@ -42,6 +42,8 @@ import { db } from '../config/firebase';
 import { useSnackbar } from 'notistack';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
 function TabPanel(props) {
   const { children, value, index, ...other } = props;
@@ -90,6 +92,7 @@ export default function Settings() {
 
   const { enqueueSnackbar } = useSnackbar();
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchDropdowns();
@@ -370,6 +373,17 @@ export default function Settings() {
 
   return (
     <Container maxWidth="lg">
+      <Box sx={{ mt: 2, mb: 2 }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/')}
+          variant="outlined"
+          size="medium"
+          sx={{ borderRadius: 2 }}
+        >
+          Back to Dashboard
+        </Button>
+      </Box>
       <Typography variant="h4" gutterBottom sx={{ mb: 4, fontWeight: 'bold' }}>
         System Settings
       </Typography>

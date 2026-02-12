@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { format } from 'date-fns';
 import {
   Box,
   Button,
@@ -26,6 +27,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import SearchIcon from '@mui/icons-material/Search';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ClearIcon from '@mui/icons-material/Clear';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
 import { collection, onSnapshot, query, orderBy, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -40,12 +42,13 @@ const STATUS_COLORS = {
   Rejected: 'error'
 };
 
-const TOTAL_CAPACITY = 139;
+const TOTAL_CAPACITY = 136;
 
 export default function RollerList() {
   const [rollers, setRollers] = useState([]);
   const [rollerStatuses, setRollerStatuses] = useState({}); // Store calculated statuses
   const [rollerDesigns, setRollerDesigns] = useState({}); // Store calculated designs
+  const [rollerDates, setRollerDates] = useState({}); // Store calculated dates
   const [openForm, setOpenForm] = useState(false);
   const [editData, setEditData] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -98,6 +101,8 @@ export default function RollerList() {
               currentStatus = 'To be sent';
             } else if (activityType === 'Roller sent') {
               currentStatus = 'Sent to Vendor';
+            } else if (activityType === 'Scrap') {
+              currentStatus = 'Scrap';
             }
 
             let currentDesign = '-';
@@ -108,25 +113,32 @@ export default function RollerList() {
                 currentDesign = latestRecord[designKey];
             }
 
-            return { id: roller.id, status: currentStatus, design: currentDesign };
+            const currentDate = latestRecord.date?.seconds 
+              ? format(new Date(latestRecord.date.seconds * 1000), 'dd/MM/yyyy') 
+              : '-';
+
+            return { id: roller.id, status: currentStatus, design: currentDesign, date: currentDate };
           }
-          return { id: roller.id, status: 'No Activity', design: '-' };
+          return { id: roller.id, status: 'No Activity', design: '-', date: '-' };
         } catch (error) {
           console.error(`Error fetching records for roller ${roller.id}:`, error);
-          return { id: roller.id, status: 'No Activity' };
+          return { id: roller.id, status: 'No Activity', date: '-' };
         }
       });
 
       const results = await Promise.all(statusPromises);
       const statuses = {};
       const designs = {};
+      const dates = {};
       results.forEach(r => {
         statuses[r.id] = r.status;
         if(r.design) designs[r.id] = r.design;
+        if(r.date) dates[r.id] = r.date;
       });
 
       setRollerStatuses(statuses);
       setRollerDesigns(designs);
+      setRollerDates(dates);
       setLoading(false);
     });
     return () => unsubscribe();
@@ -227,6 +239,18 @@ export default function RollerList() {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4, position: 'relative', minHeight: '80vh' }}>
+      <Box sx={{ mb: 2 }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/')}
+          variant="outlined"
+          size="medium"
+          sx={{ borderRadius: 2 }}
+        >
+          Back to Dashboard
+        </Button>
+      </Box>
+
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" fontWeight="bold" color="primary">
           Roller Inventory
@@ -353,6 +377,9 @@ export default function RollerList() {
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       <strong>Current Status:</strong> {rollerStatuses[roller.id] || 'No Activity'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      <strong>Date:</strong> {rollerDates[roller.id] || '-'}
                     </Typography>
                   </Box>
                 </CardContent>

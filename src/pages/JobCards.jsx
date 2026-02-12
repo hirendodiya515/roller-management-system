@@ -19,6 +19,7 @@ import { db } from '../config/firebase';
 import { format } from 'date-fns';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { jsPDF } from 'jspdf';
 import JobCardForm from '../components/JobCardForm';
 import { useNavigate } from 'react-router-dom';
@@ -188,6 +189,17 @@ export default function JobCards() {
 
     return (
         <Container maxWidth="xl" sx={{ mt: 2 }}>
+            <Box sx={{ mb: 2 }}>
+              <Button
+                startIcon={<ArrowBackIcon />}
+                onClick={() => navigate('/')}
+                variant="outlined"
+                size="medium"
+                sx={{ borderRadius: 2 }}
+              >
+                Back to Dashboard
+              </Button>
+            </Box>
             <Box display="flex" alignItems="center" mb={4}>
                 <AssignmentIcon color="primary" sx={{ fontSize: 40, mr: 2 }} />
                 <Typography variant="h4" fontWeight="bold" color="primary">

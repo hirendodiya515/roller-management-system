@@ -37,6 +37,7 @@ import { DatePicker } from '@mui/x-date-pickers';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import ClearIcon from '@mui/icons-material/Clear';
 import AssessmentIcon from '@mui/icons-material/Assessment';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { 
     addDays, 
     startOfWeek, 
@@ -525,6 +526,17 @@ export default function Analysis() {
 
     return (
         <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+            <Box sx={{ mb: 2 }}>
+              <Button
+                startIcon={<ArrowBackIcon />}
+                onClick={() => navigate('/')}
+                variant="outlined"
+                size="medium"
+                sx={{ borderRadius: 2 }}
+              >
+                Back to Dashboard
+              </Button>
+            </Box>
             {/* Header & Filter */}
             <Box display="flex" flexDirection={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', md: 'center' }} mb={4} gap={2}>
                 <Box display="flex" alignItems="center">

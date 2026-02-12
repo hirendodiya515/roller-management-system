@@ -157,7 +157,8 @@ export default function RollerDetails() {
     const statusMap = {
       'Production Start': { label: 'Running', color: '#42A5F5' }, // Light Blue
       'Production End': { label: 'To be sent', color: '#FF9800' }, // Orange
-      'Roller sent': { label: 'Sent to Vendor', color: '#FDD835' }  // Yellow
+      'Roller sent': { label: 'Sent to Vendor', color: '#FDD835' },  // Yellow
+      'Scrap': { label: 'Scrap', color: '#EF5350' }  // Red
     };
 
     return statusMap[activityType] || { label: activityType || 'Unknown', color: '#9E9E9E' };

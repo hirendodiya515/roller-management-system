@@ -40,6 +40,7 @@ import CancelIcon from '@mui/icons-material/Cancel';
 import RuleIcon from '@mui/icons-material/Rule';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import BlockIcon from '@mui/icons-material/Block';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 
 export default function Approvals() {
   const [tabIndex, setTabIndex] = useState(0); // 0: Pending, 1: Rejected
@@ -171,6 +172,17 @@ export default function Approvals() {
 
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+      <Box sx={{ mb: 2 }}>
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/')}
+          variant="outlined"
+          size="medium"
+          sx={{ borderRadius: 2 }}
+        >
+          Back to Dashboard
+        </Button>
+      </Box>
       <Box display="flex" alignItems="center" mb={3}>
         <RuleIcon color="action" sx={{ fontSize: 40, mr: 2 }} />
         <Typography variant="h4" fontWeight="bold" color="text.primary">

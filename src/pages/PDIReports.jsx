@@ -20,6 +20,7 @@ import { format } from 'date-fns';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { jsPDF } from 'jspdf';
 import AuditForm from '../components/AuditForm';
 import { useNavigate } from 'react-router-dom';
@@ -193,6 +194,17 @@ export default function PDIReports() {
 
     return (
         <Container maxWidth="xl" sx={{ mt: 2 }}>
+            <Box sx={{ mb: 2 }}>
+              <Button
+                startIcon={<ArrowBackIcon />}
+                onClick={() => navigate('/')}
+                variant="outlined"
+                size="medium"
+                sx={{ borderRadius: 2 }}
+              >
+                Back to Dashboard
+              </Button>
+            </Box>
             <Box display="flex" alignItems="center" mb={4}>
                 <AssessmentIcon color="primary" sx={{ fontSize: 40, mr: 2 }} />
                 <Typography variant="h4" fontWeight="bold" color="primary">
