@@ -49,6 +49,7 @@ export default function RollerList() {
   const [rollerStatuses, setRollerStatuses] = useState({}); // Store calculated statuses
   const [rollerDesigns, setRollerDesigns] = useState({}); // Store calculated designs
   const [rollerDates, setRollerDates] = useState({}); // Store calculated dates
+  const [rollerVendors, setRollerVendors] = useState({}); // Store calculated vendors
   const [openForm, setOpenForm] = useState(false);
   const [editData, setEditData] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -117,7 +118,20 @@ export default function RollerList() {
               ? format(new Date(latestRecord.date.seconds * 1000), 'dd/MM/yyyy') 
               : '-';
 
-            return { id: roller.id, status: currentStatus, design: currentDesign, date: currentDate };
+            // Extract Vendor Name if "Sent to Vendor"
+            let currentVendor = '';
+            if (currentStatus === 'Sent to Vendor') {
+              const vendorKey = allKeys.find(key => 
+                key.toLowerCase().includes('vendor') || 
+                key.toLowerCase().includes('supplier') ||
+                key.toLowerCase().includes('party')
+              );
+              currentVendor = vendorKey && latestRecord[vendorKey] 
+                ? String(latestRecord[vendorKey]).trim() 
+                : 'Unknown Vendor';
+            }
+
+            return { id: roller.id, status: currentStatus, design: currentDesign, date: currentDate, vendor: currentVendor };
           }
           return { id: roller.id, status: 'No Activity', design: '-', date: '-' };
         } catch (error) {
@@ -130,15 +144,18 @@ export default function RollerList() {
       const statuses = {};
       const designs = {};
       const dates = {};
+      const vendors = {};
       results.forEach(r => {
         statuses[r.id] = r.status;
         if(r.design) designs[r.id] = r.design;
         if(r.date) dates[r.id] = r.date;
+        if(r.vendor) vendors[r.id] = r.vendor;
       });
 
       setRollerStatuses(statuses);
       setRollerDesigns(designs);
       setRollerDates(dates);
+      setRollerVendors(vendors);
       setLoading(false);
     });
     return () => unsubscribe();
@@ -376,7 +393,9 @@ export default function RollerList() {
                       <strong>Make:</strong> {roller.make}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      <strong>Current Status:</strong> {rollerStatuses[roller.id] || 'No Activity'}
+                      <strong>Current Status:</strong> {rollerStatuses[roller.id] === 'Sent to Vendor' && rollerVendors[roller.id] 
+                        ? `Sent to Vendor (${rollerVendors[roller.id]})` 
+                        : (rollerStatuses[roller.id] || 'No Activity')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       <strong>Date:</strong> {rollerDates[roller.id] || '-'}
