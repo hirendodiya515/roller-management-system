@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar, Toolbar, Typography, Box, Drawer, List, ListItem,
-  ListItemButton, ListItemIcon, ListItemText, IconButton, Avatar, Divider, CssBaseline
+  ListItemButton, ListItemIcon, ListItemText, IconButton, Avatar, Divider, CssBaseline, Tooltip,
+  Dialog, DialogTitle, DialogContent, DialogActions, Button as MuiButton
 } from '@mui/material';
 
 // Icons
@@ -17,6 +18,10 @@ import HelpIcon from '@mui/icons-material/Help';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import RuleIcon from '@mui/icons-material/Rule';
+import DescriptionIcon from '@mui/icons-material/Description';
+import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
+import CloseIcon from '@mui/icons-material/Close';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../config/firebase';
@@ -28,6 +33,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false); // Default closed for floating effect
+  const [viewingDoc, setViewingDoc] = useState(null); // { title, url }
 
   const toggleDrawer = () => {
     setOpen(!open);
@@ -70,6 +76,28 @@ export default function Layout() {
           </Typography>
 
           <Box display="flex" alignItems="center" gap={2}>
+            {/* Document Links */}
+            <Box sx={{ display: 'flex', gap: 1, mr: 2 }}>
+              <Tooltip title="Roller Specification">
+                <IconButton 
+                  color="inherit" 
+                  onClick={() => setViewingDoc({ title: 'Roller Specification', url: '/docs/roller_specification.pdf' })}
+                  sx={{ bgcolor: 'rgba(255,255,255,0.1)', '&:hover': { bgcolor: 'rgba(255,255,255,0.2)' } }}
+                >
+                  <DescriptionIcon />
+                </IconButton>
+              </Tooltip>
+              {/* <Tooltip title="Inspection Plan">
+                <IconButton 
+                  color="inherit" 
+                  onClick={() => setViewingDoc({ title: 'Inspection Plan', url: '/docs/inspection_plan.pdf' })}
+                  sx={{ bgcolor: 'rgba(255,255,255,0.1)', '&:hover': { bgcolor: 'rgba(255,255,255,0.2)' } }}
+                >
+                  <AssignmentTurnedInIcon />
+                </IconButton>
+              </Tooltip> */}
+            </Box>
+
             {/* User Info */}
             <Box sx={{ display: { xs: 'none', sm: 'flex' }, flexDirection: 'column', alignItems: 'flex-end' }}>
               <Typography variant="body1" fontWeight="bold" sx={{ lineHeight: 1.2 }}>
@@ -179,6 +207,62 @@ export default function Layout() {
         <Toolbar /> {/* Spacing for TopBar */}
         <Outlet />
       </Box>
+
+      {/* Document Viewer Dialog */}
+      <Dialog
+        open={Boolean(viewingDoc)}
+        onClose={() => setViewingDoc(null)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: { height: '90vh', borderRadius: 3 }
+        }}
+      >
+        <DialogTitle sx={{ m: 0, p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', bgcolor: 'primary.main', color: 'white' }}>
+          <Typography variant="h6" fontWeight="bold">
+            {viewingDoc?.title}
+          </Typography>
+          <Box>
+            <IconButton
+              aria-label="open in new tab"
+              onClick={() => window.open(viewingDoc?.url, '_blank')}
+              sx={{ color: 'white', mr: 1 }}
+            >
+              <OpenInNewIcon />
+            </IconButton>
+            <IconButton
+              aria-label="close"
+              onClick={() => setViewingDoc(null)}
+              sx={{ color: 'white' }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 0, height: '100%', overflow: 'hidden' }}>
+          {viewingDoc && (
+            <iframe
+              src={viewingDoc.url}
+              title={viewingDoc.title}
+              width="100%"
+              height="100%"
+              style={{ border: 'none' }}
+              // Suggestions for docx: iframe might not show it, but it's the best we can do without a 3rd party service
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <MuiButton onClick={() => setViewingDoc(null)}>Close</MuiButton>
+          <MuiButton 
+            variant="contained" 
+            component="a" 
+            href={viewingDoc?.url} 
+            download
+          >
+            Download
+          </MuiButton>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
