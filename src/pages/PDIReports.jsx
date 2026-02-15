@@ -227,6 +227,25 @@ export default function PDIReports() {
                     pdf.line(margin, yPos - 3, pageWidth - margin, yPos - 3);
                     yPos += 2;
                 });
+
+                yPos += 10;
+
+                // Signatures Section
+                if (yPos > pageHeight - 60) {
+                    pdf.addPage();
+                    yPos = margin + 20;
+                }
+
+                pdf.setFontSize(10);
+                pdf.setFont('helvetica', 'bold');
+                pdf.text('Checked by:', margin + 5, yPos);
+                pdf.setFont('helvetica', 'normal');
+                pdf.text(`${auditData.checkedBy || '-'}`, margin + 35, yPos);
+
+                pdf.setFont('helvetica', 'bold');
+                pdf.text('Approved by:', pageWidth / 2 + 5, yPos);
+                pdf.setFont('helvetica', 'normal');
+                pdf.text(`${auditData.approvedBy || '-'}`, pageWidth / 2 + 35, yPos);
             }
 
             // Footer Section

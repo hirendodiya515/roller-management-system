@@ -19,6 +19,7 @@ import {
   Select,
   MenuItem,
   FormControl,
+  Grid,
 } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
@@ -121,6 +122,7 @@ const QUESTIONS = [
 export default function AuditForm({ open, onClose, recordId, rollerId }) {
   const [answers, setAnswers] = useState({});
   const [remarks, setRemarks] = useState({});
+  const [signature, setSignature] = useState({ checkedBy: "", approvedBy: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const { currentUser } = useAuth();
@@ -136,9 +138,14 @@ export default function AuditForm({ open, onClose, recordId, rollerId }) {
             const data = docSnap.data();
             setAnswers(data.questions || {});
             setRemarks(data.remarks || {});
+            setSignature({
+              checkedBy: data.checkedBy || "",
+              approvedBy: data.approvedBy || "",
+            });
           } else {
             setAnswers({});
             setRemarks({});
+            setSignature({ checkedBy: "", approvedBy: "" });
           }
         } catch (err) {
           console.error("Error fetching audit:", err);
@@ -157,6 +164,10 @@ export default function AuditForm({ open, onClose, recordId, rollerId }) {
 
   const handleRemarkChange = (id, value) => {
     setRemarks((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const handleSignatureChange = (field, value) => {
+    setSignature((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSave = async () => {
@@ -179,6 +190,8 @@ export default function AuditForm({ open, onClose, recordId, rollerId }) {
         recordId,
         questions: answers,
         remarks: remarks,
+        checkedBy: signature.checkedBy,
+        approvedBy: signature.approvedBy,
         savedAt: new Date(),
         savedBy: currentUser.uid,
       };
@@ -297,6 +310,29 @@ export default function AuditForm({ open, onClose, recordId, rollerId }) {
             </TableBody>
           </Table>
         </TableContainer>
+
+        <Grid container spacing={2} sx={{ mt: 2 }}>
+          <Grid item xs={6}>
+            <TextField
+              fullWidth
+              label="Checked By"
+              variant="outlined"
+              size="small"
+              value={signature.checkedBy}
+              onChange={(e) => handleSignatureChange("checkedBy", e.target.value)}
+            />
+          </Grid>
+          <Grid item xs={6}>
+            <TextField
+              fullWidth
+              label="Approved By"
+              variant="outlined"
+              size="small"
+              value={signature.approvedBy}
+              onChange={(e) => handleSignatureChange("approvedBy", e.target.value)}
+            />
+          </Grid>
+        </Grid>
       </DialogContent>
       <DialogActions sx={{ p: 2, bgcolor: "#f5f5f5" }}>
         <Button onClick={onClose} color="inherit">
