@@ -143,31 +143,89 @@ export default function PDIReports() {
 
             // Question labels mapping
             const questionLabels = {
-                'runOut': 'Roller Run-out (mm)',
-                'shaftRoughness': 'DU Shaft Roughness (μm)',
-                'shaftDiameter': 'DU Shaft Diameter (mm)',
-                'mountingPosition': 'DU Shaft Mounting Position',
-                'placeholder1': 'Additional Check 1',
-                'placeholder2': 'Additional Check 2'
+                'runOut': 'Roller run-out (< 0.1mm)',
+                'shaftRoughness': 'DU shaft roughness (<0.4 µm)',
+                'shaftDiameter': 'DU shaft dia. (249.93-250.00 / 209.93-210.00)',
+                'mountingPosition': 'DU shaft mounting position',
+                'circlipGrooves': 'Circlip grooves (damage free)',
+                'avgRa': 'Average Ra',
+                'avgRz': 'Average Rz',
+                'visualCondition': 'Visual condition'
+            };
+
+            const validate = (id, val) => {
+                const num = parseFloat(val);
+                if (id === 'runOut') return !isNaN(num) && num < 0.1 ? 'Pass' : 'Fail';
+                if (id === 'shaftRoughness') return !isNaN(num) && num < 0.4 ? 'Pass' : 'Fail';
+                if (id === 'shaftDiameter') {
+                    if (isNaN(num)) return 'Fail';
+                    const range1 = num >= 249.93 && num <= 250.00;
+                    const range2 = num >= 209.93 && num <= 210.00;
+                    return (range1 || range2) ? 'Pass' : 'Fail';
+                }
+                if (['mountingPosition', 'circlipGrooves', 'visualCondition'].includes(id)) {
+                    if (val === 'Acceptable') return 'Pass';
+                    if (val === 'Reject') return 'Fail';
+                    if (val === 'Deviation') return 'Deviation';
+                    return '-';
+                }
+                return '-';
             };
 
             if (auditData && auditData.questions) {
-                Object.entries(auditData.questions).forEach(([key, value]) => {
+                // Table Headers for PDF
+                pdf.setFontSize(9);
+                pdf.setFont('helvetica', 'bold');
+                pdf.setFillColor(240, 240, 240);
+                pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
+                pdf.text('Audit Question', margin + 2, yPos);
+                pdf.text('Answer', margin + 85, yPos);
+                pdf.text('Result', margin + 115, yPos);
+                pdf.text('Remark', margin + 140, yPos);
+                
+                yPos += 10;
+                pdf.setFontSize(8);
+                
+                const questionsOrder = [
+                    'runOut', 'shaftRoughness', 'shaftDiameter', 'mountingPosition', 
+                    'circlipGrooves', 'avgRa', 'avgRz', 'visualCondition'
+                ];
+
+                questionsOrder.forEach((key) => {
                     const label = questionLabels[key] || key;
+                    const value = auditData.questions[key] || '-';
+                    const remark = (auditData.remarks && auditData.remarks[key]) ? auditData.remarks[key] : '-';
+                    const result = validate(key, value);
 
-                    // Draw question background
-                    pdf.setFillColor(250, 250, 250);
-                    pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 12, 'F');
+                    // Row background for alternate rows
+                    // pdf.setFillColor(252, 252, 252);
+                    // pdf.rect(margin, yPos - 5, pageWidth - 2 * margin, 10, 'F');
 
-                    // Question label
-                    pdf.setFont('helvetica', 'bold');
-                    pdf.text(`${label}:`, margin + 5, yPos);
-
-                    // Answer
                     pdf.setFont('helvetica', 'normal');
-                    pdf.text(`${value || 'N/A'}`, margin + 80, yPos);
+                    const labelLines = pdf.splitTextToSize(label, 80);
+                    pdf.text(labelLines, margin + 2, yPos);
+                    
+                    pdf.text(`${value}`, margin + 85, yPos);
+                    
+                    // Result color
+                    if (result === 'Pass') pdf.setTextColor(0, 128, 0);
+                    else if (result === 'Fail') pdf.setTextColor(255, 0, 0);
+                    else if (result === 'Deviation') pdf.setTextColor(255, 165, 0);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.text(`${result}`, margin + 115, yPos);
+                    pdf.setTextColor(0, 0, 0);
+                    pdf.setFont('helvetica', 'normal');
 
-                    yPos += 14;
+                    const remarkLines = pdf.splitTextToSize(remark, 40);
+                    pdf.text(remarkLines, margin + 140, yPos);
+
+                    const rowHeight = Math.max(labelLines.length * 4, remarkLines.length * 4, 8);
+                    yPos += rowHeight;
+
+                    // Draw separator line
+                    pdf.setDrawColor(230, 230, 230);
+                    pdf.line(margin, yPos - 3, pageWidth - margin, yPos - 3);
+                    yPos += 2;
                 });
             }
 
