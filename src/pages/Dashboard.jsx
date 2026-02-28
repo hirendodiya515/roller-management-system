@@ -80,7 +80,7 @@ export default function Dashboard() {
               const readyToUseKey = allKeys.find(key => key.toLowerCase().startsWith('ready_to_use'));
               const readyValue = readyToUseKey ? latestRecord[readyToUseKey] : undefined;
 
-              currentStatus = readyValue === 'Yes' ? 'Ready to Use' : 'Sent to Vendor';
+              currentStatus = readyValue === 'Yes' ? 'Ready to Use' : 'To be sent';
             } else if (activityType === 'Production Start') {
               currentStatus = 'Running';
             } else if (activityType === 'Production End') {

@@ -164,7 +164,7 @@ export default function RecordForm({ open, onClose, initialData, rollerId }) {
       const allKeys = Object.keys(formData);
       const readyToUseKey = allKeys.find(key => key.toLowerCase().includes('ready_to_use'));
       const readyValue = readyToUseKey ? formData[readyToUseKey] : undefined;
-      return readyValue === 'Yes' ? 'Ready to Use' : 'Sent to Vendor';
+      return readyValue === 'Yes' ? 'Ready to Use' : 'To be sent';
     } else if (activityType === 'Production Start') {
       return 'Running';
     } else if (activityType === 'Production End') {

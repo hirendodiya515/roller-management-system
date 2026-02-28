@@ -123,7 +123,7 @@ export default function Approvals() {
             const allKeys = Object.keys(record);
             const readyToUseKey = allKeys.find(key => key.toLowerCase().includes('ready_to_use'));
             const readyValue = readyToUseKey ? record[readyToUseKey] : undefined;
-            calculatedStatus = readyValue === 'Yes' ? 'Ready to Use' : 'Sent to Vendor';
+            calculatedStatus = readyValue === 'Yes' ? 'Ready to Use' : 'To be sent';
           } else if (record.activity === 'Production Start') {
             calculatedStatus = 'Running';
           } else if (record.activity === 'Production End') {
