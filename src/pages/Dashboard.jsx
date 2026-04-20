@@ -27,7 +27,7 @@ import { FormControl, InputLabel, Select, MenuItem, Avatar } from '@mui/material
 
 const LINES = ['SG#1', 'SG#2', 'SG#3']; // For Top/Bottom summary
 const PRODUCTION_LINES = ['SG#1', 'SG#2', 'SG#3.1', 'SG#3.2']; // For Production End cards
-const TOTAL_CAPACITY = 143;
+const TOTAL_CAPACITY = 139;
 
 // Status colors matching RollerDetails
 const STATUS_COLORS = {

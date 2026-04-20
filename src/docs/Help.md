@@ -4,7 +4,7 @@
   <a href="#guide-version" class="version-card">
     <div class="info-tile">
       <h3>Version</h3>
-      <p>v3.1.0</p>
+      <p>v3.2.0</p>
       <p style="font-size: 0.9rem; font-weight: normal; margin-top: 5px;">20-Apr-2026</p>
     </div>
   </a>
@@ -73,7 +73,8 @@ Roller management system is an inventory management system for the Rolling machi
 
 | Version | Changes                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | :------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 3.1.0   | <div id="guide-version" style="scroll-margin-top: 100px;">**20-Apr-2026**<br><ul><li>Added line **Total roller changes from 136 to 142** in _Dashboard_ and _Rollers_ page.</li><li>Roller counting logic modify to ignore the Roller PDI states</li></ul>                                                                                                                                                              |
+| 3.2.0   | <div id="guide-version" style="scroll-margin-top: 100px;">**20-Apr-2026**<br><ul><li>Added line **Total roller changes from 143 to 139** in _Dashboard_ and _Rollers_ page.</li><ul>                                                                                                                                                                                                                                    |
+| 3.1.0   | <div id="guide-version" style="scroll-margin-top: 100px;">**20-Apr-2026**<br><ul><li>Added line **Total roller changes from 136 to 143** in _Dashboard_ and _Rollers_ page.</li><li>Roller counting logic modify to ignore the Roller PDI states</li></ul>                                                                                                                                                              |
 | 3.0.0   | <div id="guide-version" style="scroll-margin-top: 100px;">**12-Feb-2025**<br><ul><li>Added line **Total roller changes from 139 to 136** in _Dashboard_ and _Rollers_ page.</li><li>**Back to Dashboard** button added in _Rollers_ page.</li><li>**Date** added in the roller page</li></ul>                                                                                                                           |
 | 2.6.0   | <div id="guide-version" style="scroll-margin-top: 100px;">**23-Dec-2025**<br><ul><li>Added line **Total rollers in system _{count of roller}_/139** with **_percentage_** in _Dashboard_ and _Rollers_ page it will give an idea of how many rollers updated in the system from 139 total rollers.</li></ul>                                                                                                            |
 | 2.5.0   | <div id="guide-version" style="scroll-margin-top: 100px;">**23-Dec-2025**<br><ul><li>Added **Design-wise Roller Count** at dashboard page after **Last run roller details**.</li><li>By clicking on the roller count next to the line, you can access the rollers page with filtered roller line & selected design.</li></ul>                                                                                           |
