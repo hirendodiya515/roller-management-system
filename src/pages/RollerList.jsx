@@ -42,7 +42,7 @@ const STATUS_COLORS = {
   Rejected: 'error'
 };
 
-const TOTAL_CAPACITY = 136;
+const TOTAL_CAPACITY = 143;
 
 export default function RollerList() {
   const [rollers, setRollers] = useState([]);
