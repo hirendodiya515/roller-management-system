@@ -173,8 +173,6 @@ export default function RecordForm({ open, onClose, initialData, rollerId }) {
       return 'Sent to Vendor';
     } else if (activityType === 'Scrap') {
       return 'Scrap';
-    } else if (activityType === 'Roller PDI') {
-      return 'Roller PDI';
     }
     // Default: use activity type as-is
     return activityType;
@@ -190,13 +188,14 @@ export default function RecordForm({ open, onClose, initialData, rollerId }) {
         payload.createdAt = serverTimestamp();
         await addDoc(collection(db, `rollers/${rollerId}/records`), payload);
 
-        // Update parent roller with latest status/activity
-        // Calculate the proper status from activity type
-        const calculatedStatus = calculateStatusFromActivity(data.activity, data);
-        await updateDoc(doc(db, 'rollers', rollerId), {
-          currentStatus: calculatedStatus,
-          lastUpdated: serverTimestamp()
-        });
+        // Update parent roller with latest status/activity (skip for Roller PDI)
+        if (data.activity !== 'Roller PDI') {
+          const calculatedStatus = calculateStatusFromActivity(data.activity, data);
+          await updateDoc(doc(db, 'rollers', rollerId), {
+            currentStatus: calculatedStatus,
+            lastUpdated: serverTimestamp()
+          });
+        }
 
       } else {
         // If editing an existing record that was previously approved/rejected,
@@ -210,13 +209,14 @@ export default function RecordForm({ open, onClose, initialData, rollerId }) {
 
         await updateDoc(doc(db, `rollers/${rollerId}/records`, initialData.id), payload);
 
-        // Also update parent if editing the latest record
-        // Calculate the proper status from activity type
-        const calculatedStatus = calculateStatusFromActivity(data.activity, data);
-        await updateDoc(doc(db, 'rollers', rollerId), {
-          currentStatus: calculatedStatus,
-          lastUpdated: serverTimestamp()
-        });
+        // Also update parent if editing the latest record (skip for Roller PDI)
+        if (data.activity !== 'Roller PDI') {
+          const calculatedStatus = calculateStatusFromActivity(data.activity, data);
+          await updateDoc(doc(db, 'rollers', rollerId), {
+            currentStatus: calculatedStatus,
+            lastUpdated: serverTimestamp()
+          });
+        }
       }
       enqueueSnackbar('Record saved successfully', { variant: 'success' });
       onClose();

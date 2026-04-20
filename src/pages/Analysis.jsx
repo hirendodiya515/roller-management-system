@@ -358,7 +358,7 @@ export default function Analysis() {
             // and ensures consistency with Dashboard logic
             rollers.forEach(roller => {
                 // Find latest approved record for this roller from allRecords
-                const rollerRecords = allRecords.filter(r => r.rollerId === roller.id && r.status === 'Approved');
+                const rollerRecords = allRecords.filter(r => r.rollerId === roller.id && r.status === 'Approved' && r.activity !== 'Roller PDI');
                 
                 if (rollerRecords.length > 0) {
                     // Sort to get latest

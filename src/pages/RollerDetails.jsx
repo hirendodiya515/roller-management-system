@@ -130,7 +130,7 @@ export default function RollerDetails() {
 
   // Calculate Current Status from latest approved record only
   const currentStatus = useMemo(() => {
-    const approvedRecords = records.filter(r => r.status === 'Approved');
+    const approvedRecords = records.filter(r => r.status === 'Approved' && r.activity !== 'Roller PDI');
     if (approvedRecords.length === 0) return { label: 'No Activity', color: '#9E9E9E' };
 
     const latestApprovedRecord = approvedRecords[0]; // Already sorted by date desc

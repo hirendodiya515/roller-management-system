@@ -117,29 +117,29 @@ export default function Approvals() {
           const rollerRef = doc(db, 'rollers', record.rollerId);
           
           // Calculate the proper status from activity type
-          let calculatedStatus = record.activity;
-          if (record.activity === 'Roller Received') {
-            // Check for ready_to_use field (case insensitive search)
-            const allKeys = Object.keys(record);
-            const readyToUseKey = allKeys.find(key => key.toLowerCase().includes('ready_to_use'));
-            const readyValue = readyToUseKey ? record[readyToUseKey] : undefined;
-            calculatedStatus = readyValue === 'Yes' ? 'Ready to Use' : 'To be sent';
-          } else if (record.activity === 'Production Start') {
-            calculatedStatus = 'Running';
-          } else if (record.activity === 'Production End') {
-            calculatedStatus = 'To be sent';
-          } else if (record.activity === 'Roller sent') {
-            calculatedStatus = 'Sent to Vendor';
-          } else if (record.activity === 'Scrap') {
-            calculatedStatus = 'Scrap';
-          } else if (record.activity === 'Roller PDI') {
-            calculatedStatus = 'Roller PDI';
-          }
+          if (record.activity !== 'Roller PDI') {
+            let calculatedStatus = record.activity;
+            if (record.activity === 'Roller Received') {
+              // Check for ready_to_use field (case insensitive search)
+              const allKeys = Object.keys(record);
+              const readyToUseKey = allKeys.find(key => key.toLowerCase().includes('ready_to_use'));
+              const readyValue = readyToUseKey ? record[readyToUseKey] : undefined;
+              calculatedStatus = readyValue === 'Yes' ? 'Ready to Use' : 'To be sent';
+            } else if (record.activity === 'Production Start') {
+              calculatedStatus = 'Running';
+            } else if (record.activity === 'Production End') {
+              calculatedStatus = 'To be sent';
+            } else if (record.activity === 'Roller sent') {
+              calculatedStatus = 'Sent to Vendor';
+            } else if (record.activity === 'Scrap') {
+              calculatedStatus = 'Scrap';
+            }
 
-          await updateDoc(rollerRef, {
-            currentStatus: calculatedStatus,
-            lastUpdated: serverTimestamp()
-          });
+            await updateDoc(rollerRef, {
+              currentStatus: calculatedStatus,
+              lastUpdated: serverTimestamp()
+            });
+          }
         } catch (error) {
           console.error("Error updating roller status:", error);
           // Don't fail the approval if roller update fails

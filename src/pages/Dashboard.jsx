@@ -63,7 +63,7 @@ export default function Dashboard() {
           const recordsSnapshot = await getDocs(recordsQuery);
           const approvedRecords = recordsSnapshot.docs
             .map(doc => doc.data())
-            .filter(r => r.status === 'Approved');
+            .filter(r => r.status === 'Approved' && r.activity !== 'Roller PDI');
 
           if (approvedRecords.length > 0) {
             const latestRecord = approvedRecords[0];
