@@ -29,7 +29,9 @@ export const checkAndTriggerAlerts = async (config, emailJsConfig) => {
 
     try {
         const rollersSnapshot = await getDocs(collection(db, 'rollers'));
-        const rollers = rollersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const rollers = rollersSnapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter(r => !r.isDeleted);
         checked = rollers.length;
 
         // Initialize EmailJS

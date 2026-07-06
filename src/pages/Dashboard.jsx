@@ -12,7 +12,7 @@ import {
   Skeleton,
   Divider
 } from '@mui/material';
-import { collection, onSnapshot, query, getDocs, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, getDocs, orderBy, doc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -27,7 +27,7 @@ import { FormControl, InputLabel, Select, MenuItem, Avatar } from '@mui/material
 
 const LINES = ['SG#1', 'SG#2', 'SG#3']; // For Top/Bottom summary
 const PRODUCTION_LINES = ['SG#1', 'SG#2', 'SG#3.1', 'SG#3.2']; // For Production End cards
-const TOTAL_CAPACITY = 140;
+
 
 // Status colors matching RollerDetails
 const STATUS_COLORS = {
@@ -45,12 +45,26 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [selectedDesign, setSelectedDesign] = useState('');
   const [availableDesigns, setAvailableDesigns] = useState([]);
+  const [totalCapacity, setTotalCapacity] = useState(null);
   const navigate = useNavigate();
+
+  // Fetch general settings (capacity) in real-time
+  useEffect(() => {
+    const docRef = doc(db, 'settings', 'general');
+    const unsubscribeGeneral = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setTotalCapacity(docSnap.data().totalCapacity || 140);
+      }
+    });
+    return () => unsubscribeGeneral();
+  }, []);
 
   // Fetch all rollers and their latest approved records
   useEffect(() => {
     const unsubscribeRollers = onSnapshot(collection(db, 'rollers'), async (snapshot) => {
-      const rollerData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const rollerData = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(r => !r.isDeleted);
       setRollers(rollerData);
 
       // Fetch latest approved record for each roller to get current status in PARALLEL
@@ -475,27 +489,33 @@ export default function Dashboard() {
         </Box>
         
         <Box display="flex" alignItems="center" gap={2}>
-          <Typography variant="subtitle1" fontWeight="600" sx={{ color: 'text.secondary' }}>
-            Total rollers in system <Box component="span" color="primary.main">{rollers.length}</Box>/{TOTAL_CAPACITY}
-          </Typography>
-          <Paper
-            elevation={0}
-            sx={{
-              width: 50,
-              height: 40,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              bgcolor: 'primary.main',
-              color: 'white',
-              borderRadius: 2,
-              fontWeight: 'bold',
-              fontSize: '1.0rem',
-              boxShadow: '0 4px 12px rgba(21, 101, 192, 0.2)'
-            }}
-          >
-            {Math.round((rollers.length / TOTAL_CAPACITY) * 100)}%
-          </Paper>
+          {totalCapacity === null ? (
+            <Skeleton variant="rectangular" width={180} height={40} sx={{ borderRadius: 2 }} />
+          ) : (
+            <>
+              <Typography variant="subtitle1" fontWeight="600" sx={{ color: 'text.secondary' }}>
+                Total rollers in system <Box component="span" color="primary.main">{rollers.length}</Box>/{totalCapacity}
+              </Typography>
+              <Paper
+                elevation={0}
+                sx={{
+                  width: 50,
+                  height: 40,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  bgcolor: 'primary.main',
+                  color: 'white',
+                  borderRadius: 2,
+                  fontWeight: 'bold',
+                  fontSize: '1.0rem',
+                  boxShadow: '0 4px 12px rgba(21, 101, 192, 0.2)'
+                }}
+              >
+                {totalCapacity > 0 ? Math.round((rollers.length / totalCapacity) * 100) : 0}%
+              </Paper>
+            </>
+          )}
         </Box>
       </Box>
 

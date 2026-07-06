@@ -68,11 +68,12 @@ export default function JobCards() {
                         line: rollerData.line,
                         position: rollerData.position,
                         rgpNo: jobCardInfo.rgpNo || '-',
-                        reasonForSending: jobCardInfo.reasonForSending || '-'
+                        reasonForSending: jobCardInfo.reasonForSending || '-',
+                        isRollerDeleted: rollerData.isDeleted || false
                     };
                 });
                 const fetchedCards = await Promise.all(cardPromises);
-                setJobCards(fetchedCards);
+                setJobCards(fetchedCards.filter(c => !c.isRollerDeleted));
             } catch (error) {
                 console.error('Error fetching job cards:', error);
             } finally {

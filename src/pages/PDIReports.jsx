@@ -58,11 +58,12 @@ export default function PDIReports() {
                         ...recordData,
                         rollerNumber: rollerData.rollerNumber,
                         line: rollerData.line,
-                        position: rollerData.position
+                        position: rollerData.position,
+                        isRollerDeleted: rollerData.isDeleted || false
                     };
                 });
                 const fetchedReports = await Promise.all(reportPromises);
-                setReports(fetchedReports);
+                setReports(fetchedReports.filter(r => !r.isRollerDeleted));
             } catch (error) {
                 console.error('Error fetching PDI reports:', error);
             } finally {

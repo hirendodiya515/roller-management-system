@@ -81,11 +81,12 @@ export default function Approvals() {
             rollerId: rollerRef.id,
             rollerNumber: rollerData.rollerNumber,
             line: rollerData.line,
+            isRollerDeleted: rollerData.isDeleted || false,
             ...data
         };
       }));
       
-      setRecords(fetchedRecords);
+      setRecords(fetchedRecords.filter(r => !r.isRollerDeleted));
     } catch (error) {
       console.error("Error fetching approval records:", error);
       enqueueSnackbar("Failed to load records. Check console/indexes.", { variant: 'error' });

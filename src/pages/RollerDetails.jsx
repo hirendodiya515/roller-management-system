@@ -18,9 +18,12 @@ import {
   Tooltip,
   Card,
   CardContent,
-  CardActionArea
+  CardActionArea,
+  Alert
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { useSnackbar } from 'notistack';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import EditIcon from '@mui/icons-material/Edit';
@@ -60,14 +63,22 @@ export default function RollerDetails() {
   const [selectedJobCardRecord, setSelectedJobCardRecord] = useState(null);
   const [selectedActivity, setSelectedActivity] = useState(null);
   const { userRole, currentUser } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
 
   const SYSTEM_FIELDS = ['rollerDiameter', 'runningLine', 'rollerRa', 'rollerRz', 'date', 'activity'];
 
   useEffect(() => {
-    getDoc(doc(db, 'rollers', id)).then(d => setRoller(d.data()));
+    const rollerRef = doc(db, 'rollers', id);
+    const unsubRoller = onSnapshot(rollerRef, (docSnap) => {
+      if (docSnap.exists()) {
+        setRoller({ id: docSnap.id, ...docSnap.data() });
+      } else {
+        setRoller(null);
+      }
+    });
 
     const q = query(collection(db, `rollers/${id}/records`), orderBy('date', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
+    const unsubRecords = onSnapshot(q, (snap) => {
       setRecords(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
@@ -90,7 +101,10 @@ export default function RollerDetails() {
     };
     fetchConfigs();
 
-    return () => unsub();
+    return () => {
+      unsubRoller();
+      unsubRecords();
+    };
   }, [id]);
 
   const handleApproval = async (recordId, isApproved) => {
@@ -108,6 +122,29 @@ export default function RollerDetails() {
       await updateDoc(doc(db, `rollers/${id}/records`, recordId), approvalData);
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  const handleDeleteRoller = async () => {
+    if (userRole !== 'Admin') return;
+
+    const confirm1 = window.confirm("Are you sure you want to delete this roller? It will be archived and hidden from the dashboard.");
+    if (!confirm1) return;
+
+    const confirm2 = window.confirm("Are you absolutely sure you want to delete this roller? All its records will be kept but hidden from the dashboard.");
+    if (!confirm2) return;
+
+    try {
+      await updateDoc(doc(db, 'rollers', id), {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: currentUser?.uid || 'Unknown'
+      });
+      enqueueSnackbar('Roller deleted successfully', { variant: 'success' });
+      navigate('/rollers');
+    } catch (error) {
+      console.error("Error deleting roller:", error);
+      enqueueSnackbar('Failed to delete roller', { variant: 'error' });
     }
   };
 
@@ -177,8 +214,8 @@ export default function RollerDetails() {
   return (
     <Container maxWidth="xl" sx={{ mt: 1 }}>
 
-      {/* Back Button */}
-      <Box sx={{ mb: 2 }}>
+      {/* Back Button and Actions */}
+      <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Button
           startIcon={<ArrowBackIcon />}
           onClick={() => navigate('/rollers')}
@@ -187,7 +224,25 @@ export default function RollerDetails() {
         >
           Back to Rollers
         </Button>
+        {userRole === 'Admin' && !roller.isDeleted && (
+          <Button
+            startIcon={<DeleteIcon />}
+            onClick={handleDeleteRoller}
+            variant="contained"
+            color="error"
+            size="medium"
+          >
+            Delete Roller
+          </Button>
+        )}
       </Box>
+
+      {/* Warning Banner for Archived Rollers */}
+      {roller.isDeleted && (
+        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+          This roller has been deleted/archived. It is stored in the database for historical reference, but is hidden from active dashboards and lists.
+        </Alert>
+      )}
 
       {/* Top Section: Roller Info + Current Status + Activity Cards */}
       <Grid container spacing={2} sx={{ mb: 3 }}>

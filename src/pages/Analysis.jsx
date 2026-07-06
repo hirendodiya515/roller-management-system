@@ -96,7 +96,9 @@ export default function Analysis() {
     const fetchData = async () => {
         try {
             const rollersSnapshot = await getDocs(collection(db, 'rollers'));
-            const rollersData = rollersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const rollersData = rollersSnapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(r => !r.isDeleted);
             setRollers(rollersData);
 
             const recordsPromises = rollersData.map(async (roller) => {

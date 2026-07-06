@@ -90,13 +90,31 @@ export default function Settings() {
   const [openAddDialog, setOpenAddDialog] = useState(false);
   const [newField, setNewField] = useState({ label: '', type: 'text', options: '' });
 
+  const [totalCapacity, setTotalCapacity] = useState(140);
+
   const { enqueueSnackbar } = useSnackbar();
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
+  const fetchGeneralSettings = async () => {
+    try {
+      const docRef = doc(db, 'settings', 'general');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        setTotalCapacity(docSnap.data().totalCapacity || 140);
+      } else {
+        await setDoc(docRef, { totalCapacity: 140 });
+        setTotalCapacity(140);
+      }
+    } catch (error) {
+      console.error("Error fetching general settings:", error);
+    }
+  };
+
   useEffect(() => {
     fetchDropdowns();
     fetchUsers();
+    fetchGeneralSettings();
   }, []);
 
   useEffect(() => {
@@ -352,6 +370,16 @@ export default function Settings() {
     }
   };
 
+  const handleSaveGeneralSettings = async () => {
+    try {
+      await setDoc(doc(db, 'settings', 'general'), { totalCapacity: Number(totalCapacity) });
+      enqueueSnackbar('General settings saved successfully', { variant: 'success' });
+    } catch (error) {
+      console.error("Error saving general settings:", error);
+      enqueueSnackbar('Error saving general settings', { variant: 'error' });
+    }
+  };
+
   const handleRunAlertCheck = async () => {
     if (!emailJsConfig.serviceId || !emailJsConfig.templateId || !emailJsConfig.publicKey) {
       enqueueSnackbar('Please configure EmailJS settings first', { variant: 'warning' });
@@ -394,6 +422,7 @@ export default function Settings() {
           <Tab label="Form Customization" />
           <Tab label="User Management" />
           <Tab label="Alert Configuration" />
+          <Tab label="General Settings" />
         </Tabs>
 
         {/* Tab 1: Dropdown Management */}
@@ -803,6 +832,46 @@ export default function Settings() {
                 size="large"
               >
                 Save Configuration
+              </Button>
+            </Box>
+          </Box>
+        </TabPanel>
+
+        {/* Tab 5: General Settings */}
+        <TabPanel value={value} index={4}>
+          <Box sx={{ maxWidth: 600 }}>
+            <Typography variant="h6" gutterBottom sx={{ fontWeight: 'bold' }}>
+              General System Settings
+            </Typography>
+            <Paper variant="outlined" sx={{ p: 3, mb: 3, borderRadius: 2 }}>
+              <Grid container spacing={3} alignItems="center">
+                <Grid item xs={12} sm={8}>
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    Total Roller Capacity
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Configure the maximum number of rollers supported in the system. This value is used in the dashboard progress bar.
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    type="number"
+                    fullWidth
+                    label="Capacity"
+                    value={totalCapacity}
+                    onChange={(e) => setTotalCapacity(e.target.value)}
+                  />
+                </Grid>
+              </Grid>
+            </Paper>
+            <Box display="flex" justifyContent="flex-end">
+              <Button
+                variant="contained"
+                startIcon={<SaveIcon />}
+                onClick={handleSaveGeneralSettings}
+                size="large"
+              >
+                Save Settings
               </Button>
             </Box>
           </Box>
