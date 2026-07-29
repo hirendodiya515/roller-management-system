@@ -74,7 +74,8 @@ export default function Settings() {
   const [dropdowns, setDropdowns] = useState({
     activityTypes: [],
     lines: [],
-    designPatterns: []
+    designPatterns: [],
+    refractoryTypes: []
   });
   const [newOption, setNewOption] = useState('');
   const [selectedDropdown, setSelectedDropdown] = useState('activityTypes');
@@ -130,12 +131,19 @@ export default function Settings() {
       const docRef = doc(db, 'settings', 'dropdowns');
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        setDropdowns(docSnap.data());
+        const data = docSnap.data();
+        // Automatically migrate refractoryTypes if missing
+        if (!data.refractoryTypes) {
+          data.refractoryTypes = ['Lip block', 'Moving block', 'Overflow block', 'Flat arc'];
+          await updateDoc(docRef, { refractoryTypes: data.refractoryTypes });
+        }
+        setDropdowns(data);
       } else {
         const initialData = {
           activityTypes: ['Production Start', 'Production End', 'Roller Sent', 'Roller Received'],
           lines: ['SG#1', 'SG#2', 'SG#3.1', 'SG#3.2'],
-          designPatterns: ['Pattern A', 'Pattern B']
+          designPatterns: ['Pattern A', 'Pattern B'],
+          refractoryTypes: ['Lip block', 'Moving block', 'Overflow block', 'Flat arc']
         };
         await setDoc(docRef, initialData);
         setDropdowns(initialData);
@@ -303,7 +311,8 @@ export default function Settings() {
   const dropdownLabels = {
     activityTypes: 'Activity Types',
     lines: 'Production Lines',
-    designPatterns: 'Design Patterns'
+    designPatterns: 'Design Patterns',
+    refractoryTypes: 'Refractory Types'
   };
 
   // Alert Config State
@@ -439,6 +448,7 @@ export default function Settings() {
                   <MenuItem value="activityTypes">Activity Types</MenuItem>
                   <MenuItem value="lines">Production Lines</MenuItem>
                   <MenuItem value="designPatterns">Design Patterns</MenuItem>
+                  <MenuItem value="refractoryTypes">Refractory Types</MenuItem>
                 </Select>
               </FormControl>
             </Grid>

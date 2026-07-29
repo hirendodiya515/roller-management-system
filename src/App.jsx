@@ -18,6 +18,7 @@ import ProtectedRoute from './components/AuthRoute';
 import Layout from './components/Layout';
 import { CssBaseline } from '@mui/material'; // <--- Import this
 import Help from './pages/Help';
+import Refractory from './pages/Refractory'
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
                 <Route path="/job-cards" element={<JobCards />} />
                 <Route path="/approvals" element={<Approvals />} />
                 <Route path="/help" element={<Help />} />
+                <Route path="/refractory" element={<Refractory />} />
               </Route>
             </Routes>
           </AuthProvider>

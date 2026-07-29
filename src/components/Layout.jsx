@@ -47,6 +47,7 @@ export default function Layout() {
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
     { text: 'Rollers', icon: <InventoryIcon />, path: '/rollers' },
+    { text: 'Refractory', icon: <InventoryIcon />, path: '/refractory' },
     { text: 'Analysis', icon: <AssessmentIcon />, path: '/analysis' },
     { text: 'PDI Report', icon: <FactCheckIcon />, path: '/pdi-reports' },
     { text: 'Job Cards', icon: <AssignmentIcon />, path: '/job-cards' },
