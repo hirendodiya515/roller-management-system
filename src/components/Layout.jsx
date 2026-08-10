@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar, Toolbar, Typography, Box, Drawer, List, ListItem,
-  ListItemButton, ListItemIcon, ListItemText, IconButton, Avatar, Divider, CssBaseline, Tooltip,
+  ListItemButton, ListItemIcon, ListItemText, IconButton, Avatar, Divider, CssBaseline, Tooltip, Badge,
   Dialog, DialogTitle, DialogContent, DialogActions, Button as MuiButton
 } from '@mui/material';
 
@@ -26,6 +26,9 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { useAuth } from '../context/AuthContext';
 import { auth } from '../config/firebase';
 
+import FolderIcon from '@mui/icons-material/Folder';
+import DocumentHubModal from './DocumentHubModal';
+
 const drawerWidth = 260;
 
 export default function Layout() {
@@ -34,6 +37,7 @@ export default function Layout() {
   const location = useLocation();
   const [open, setOpen] = useState(false); // Default closed for floating effect
   const [viewingDoc, setViewingDoc] = useState(null); // { title, url }
+  const [docHubOpen, setDocHubOpen] = useState(false);
 
   const toggleDrawer = () => {
     setOpen(!open);
@@ -77,27 +81,36 @@ export default function Layout() {
           </Typography>
 
           <Box display="flex" alignItems="center" gap={2}>
-            {/* Document Links */}
-            <Box sx={{ display: 'flex', gap: 1, mr: 2 }}>
-              <Tooltip title="Roller Specification">
-                <IconButton 
-                  color="inherit" 
-                  onClick={() => setViewingDoc({ title: 'Roller Specification', url: '/docs/roller_specification.pdf' })}
-                  sx={{ bgcolor: 'rgba(255,255,255,0.1)', '&:hover': { bgcolor: 'rgba(255,255,255,0.2)' } }}
-                >
-                  <DescriptionIcon />
-                </IconButton>
-              </Tooltip>
-              {/* <Tooltip title="Inspection Plan">
-                <IconButton 
-                  color="inherit" 
-                  onClick={() => setViewingDoc({ title: 'Inspection Plan', url: '/docs/inspection_plan.pdf' })}
-                  sx={{ bgcolor: 'rgba(255,255,255,0.1)', '&:hover': { bgcolor: 'rgba(255,255,255,0.2)' } }}
-                >
-                  <AssignmentTurnedInIcon />
-                </IconButton>
-              </Tooltip> */}
-            </Box>
+            {/* Document Hub Pop Window Button */}
+            <Tooltip title="System Documents & Attachments (7+ Files)">
+              <MuiButton
+                color="inherit"
+                onClick={() => setDocHubOpen(true)}
+                startIcon={
+                  <Badge badgeContent={7} color="error" overlap="rectangular" sx={{ '& .MuiBadge-badge': { fontWeight: 'bold' } }}>
+                    <FolderIcon />
+                  </Badge>
+                }
+                sx={{
+                  bgcolor: 'rgba(255, 255, 255, 0.15)',
+                  borderRadius: '20px',
+                  px: 2,
+                  py: 0.8,
+                  textTransform: 'none',
+                  fontWeight: 'bold',
+                  mr: 1,
+                  border: '1px solid rgba(255, 255, 255, 0.3)',
+                  backdropFilter: 'blur(4px)',
+                  '&:hover': {
+                    bgcolor: 'rgba(255, 255, 255, 0.25)',
+                    transform: 'scale(1.02)'
+                  },
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <Box sx={{ display: { xs: 'none', sm: 'inline' } }}>Documents</Box>
+              </MuiButton>
+            </Tooltip>
 
             {/* User Info */}
             <Box sx={{ display: { xs: 'none', sm: 'flex' }, flexDirection: 'column', alignItems: 'flex-end' }}>
@@ -264,6 +277,15 @@ export default function Layout() {
           </MuiButton>
         </DialogActions>
       </Dialog>
+
+      {/* Document Hub Pop Window */}
+      <DocumentHubModal
+        open={docHubOpen}
+        onClose={() => setDocHubOpen(false)}
+        onViewDoc={(doc) => {
+          setViewingDoc(doc);
+        }}
+      />
     </Box>
   );
 }
