@@ -4,8 +4,8 @@
   <a href="#guide-version" class="version-card">
     <div class="info-tile">
       <h3>Version</h3>
-      <p>v3.2.0</p>
-      <p style="font-size: 0.9rem; font-weight: normal; margin-top: 5px;">20-Apr-2026</p>
+      <p>v3.4.0</p>
+      <p style="font-size: 0.9rem; font-weight: normal; margin-top: 5px;">14-Aug-2026</p>
     </div>
   </a>
   <div class="info-tile">
@@ -38,7 +38,10 @@ Roller management system is an inventory management system for the Rolling machi
     <h3>Analysis Page</h3>
     <p>Charts for production‑end delay, roller‑sent delay, status distribution. Track delays and location.</p>
   </a>
-  
+  <a href="#guide-refractory" class="page-card">
+    <h3>Refractory Page</h3>
+    <p>Manage refractory inventory, furnace-type stock status, stock addition logs, and usage tracking.</p>
+  </a>
 </div>
 
 ### HOME/DASHBOARD PAGE
@@ -69,10 +72,17 @@ Roller management system is an inventory management system for the Rolling machi
 | <img src="/help/analysis2.png" alt="Analysis page"> | <div id="guide-analysis" style="scroll-margin-top: 100px;"></div><ul><li>**Pareto Chart**: Shows the what are the top reason for sending the roller to vendor with cumulative trend.</li><li>**Column Chart**: Shows how many period it takes (in days) from sent to received the roller.</li></ul>                                                 |
 | <img src="/help/analysis3.png" alt="Analysis page"> | <div id="guide-analysis" style="scroll-margin-top: 100px;"></div><ul><li>**Line Wise roller list**: For exporting the roller list for the specific line or all line as csv.</li><li>**Complete History**: For exporting the complete history of the all rollers as excel file.</li></ul>                                                            |
 
+### REFRACTORY MANAGEMENT PAGE
+
+|                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| :---------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| <img src="/help/refractory.png" alt="Refractory page"> | <div id="guide-refractory" style="scroll-margin-top: 100px;"></div>**Refractory Stock Management Page**<br>Comprehensive system to monitor refractory inventory levels, add/consume stock, and track usage history.<br><ul><li>**Furnace-Type Stock Status**: View real-time aggregated stock for **End Fired** (SG#1 & SG#2), **Cross Fired** (SG#3), and **Common** stock with line dedication breakdown and `Sets \| Nos` vertical column alignment.</li><li>**Active Stock Batches**: Detailed card view of active refractory batches with percentage remaining indicators, search, and line/furnace filters.</li><li>**Use Stock**: Log inventory consumption per furnace line with usage remarks and real-time stock updates.</li><li>**Admin Edit & Delete**: Admins can edit stock parameters or delete mistake entries and restore stock automatically.</li><li>**Stock Addition & Usage Logs**: View complete audit trail for stock additions and usage history.</li></ul> |
+
 ### CHANGELOG
 
 | Version | Changes                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | :------ | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3.4.0   | <div id="guide-version" style="scroll-margin-top: 100px;">**14-Aug-2026**<br><ul><li>**Refractory Stock Management System:** Added a brand new dedicated **Refractory Management** page to track, manage, and consume refractory inventory across End Fired (SG#1 & SG#2), Cross Fired (SG#3), and Common stock.</li><li>**Furnace-Type Wise Summary & Line Dedication:** Upgraded inventory summary to group stock by furnace architecture, featuring strict `Sets \| Nos` vertical column grid alignment, ghost fonts for zero counts, and line dedication sub-rows.</li><li>**Admin Edit & Delete Capabilities:** Restricted entry modification rights exclusively to Admins for editing stock batch specifications, correcting quantity mistakes, and editing or deleting usage logs with automatic inventory restoration.</li></ul> |
 | 3.3.0   | <div id="guide-version" style="scroll-margin-top: 100px;">**06-Jul-2026**<br><ul><li>**Soft Deletion of Rollers:** Replaced permanent deletion of rollers with an archiving mechanism. Admin users can archive rollers with a double-confirmation prompt from the Roller Details page, hiding them from active views while preserving history.</li><li>**Configurable Roller Capacity:** Added a new **General Settings** tab to settings to configure total capacity dynamically, removing the hardcoded value of 140.</li></ul> |
 | 3.2.0   | <div id="guide-version" style="scroll-margin-top: 100px;">**20-Apr-2026**<br><ul><li>Added line **Total roller changes from 143 to 139** in _Dashboard_ and _Rollers_ page.</li></ul> |
 | 3.1.0   | <div id="guide-version" style="scroll-margin-top: 100px;">**20-Apr-2026**<br><ul><li>Added line **Total roller changes from 136 to 143** in _Dashboard_ and _Rollers_ page.</li><li>Roller counting logic modify to ignore the Roller PDI states</li></ul>                                                                                                                                                              |
