@@ -50,8 +50,11 @@ import CloseIcon from '@mui/icons-material/Close';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import NumbersIcon from '@mui/icons-material/Numbers';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 
-import { collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -65,7 +68,7 @@ export default function Refractory() {
   const { enqueueSnackbar } = useSnackbar();
 
   // Component States
-  const [dropdowns, setDropdowns] = useState({ lines: [], refractoryTypes: [] });
+  const [dropdowns, setDropdowns] = useState({ lines: [], refractoryTypes: [], furnaceTypes: [] });
   const [stocks, setStocks] = useState([]);
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +80,12 @@ export default function Refractory() {
 
   // Form Modal States
   const [openAddForm, setOpenAddForm] = useState(false);
+  const [stockToEdit, setStockToEdit] = useState(null);
   
+  // Delete Stock State
+  const [stockToDelete, setStockToDelete] = useState(null);
+  const [openDeleteStockDialog, setOpenDeleteStockDialog] = useState(false);
+
   // Use Stock Modal States
   const [openUseForm, setOpenUseForm] = useState(false);
   const [selectedStock, setSelectedStock] = useState(null);
@@ -85,7 +93,137 @@ export default function Refractory() {
   const [useRemarks, setUseRemarks] = useState("");
   const [submittingUse, setSubmittingUse] = useState(false);
 
+  // Edit Usage Log State
+  const [logToEdit, setLogToEdit] = useState(null);
+  const [openEditLogModal, setOpenEditLogModal] = useState(false);
+  const [editLogQty, setEditLogQty] = useState(1);
+  const [editLogRemarks, setEditLogRemarks] = useState("");
+  const [submittingEditLog, setSubmittingEditLog] = useState(false);
+
+  // Delete Usage Log State
+  const [logToDelete, setLogToDelete] = useState(null);
+  const [openDeleteLogDialog, setOpenDeleteLogDialog] = useState(false);
+  const [submittingDeleteLog, setSubmittingDeleteLog] = useState(false);
+
   const canAdd = userRole === 'Admin' || userRole === 'Editor';
+  const isAdmin = userRole === 'Admin';
+
+  // Handler for Opening Add Stock Form
+  const handleOpenAddForm = () => {
+    setStockToEdit(null);
+    setOpenAddForm(true);
+  };
+
+  // Handler for Opening Edit Stock Form
+  const handleOpenEditForm = (stock) => {
+    setStockToEdit(stock);
+    setOpenAddForm(true);
+  };
+
+  // Handler for Confirming Delete Stock Batch
+  const handleOpenDeleteStock = (stock) => {
+    setStockToDelete(stock);
+    setOpenDeleteStockDialog(true);
+  };
+
+  const handleConfirmDeleteStock = async () => {
+    if (!stockToDelete) return;
+    try {
+      await deleteDoc(doc(db, 'refractories', stockToDelete.id));
+      enqueueSnackbar('Refractory stock deleted successfully', { variant: 'success' });
+      setOpenDeleteStockDialog(false);
+      setStockToDelete(null);
+    } catch (err) {
+      console.error("Error deleting stock:", err);
+      enqueueSnackbar("Failed to delete stock: " + err.message, { variant: 'error' });
+    }
+  };
+
+  // Handlers for Usage Logs Edit & Delete
+  const handleOpenEditLog = (log) => {
+    setLogToEdit(log);
+    setEditLogQty(log.unitsUsed || 1);
+    setEditLogRemarks(log.remarks || "");
+    setOpenEditLogModal(true);
+  };
+
+  const handleConfirmEditLog = async () => {
+    if (!logToEdit) return;
+    if (editLogQty <= 0) {
+      enqueueSnackbar('Quantity used must be greater than 0', { variant: 'warning' });
+      return;
+    }
+    setSubmittingEditLog(true);
+    try {
+      const oldQty = Number(logToEdit.unitsUsed || 0);
+      const newQty = Number(editLogQty);
+      const delta = oldQty - newQty; // positive if new Qty is less (restores stock), negative if new Qty is more
+
+      // Update log entry
+      await updateDoc(doc(db, 'refractoryLogs', logToEdit.id), {
+        unitsUsed: newQty,
+        remarks: editLogRemarks,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser?.email || 'Unknown'
+      });
+
+      // Adjust parent refractory batch if delta != 0
+      if (delta !== 0 && logToEdit.refractoryId) {
+        const stockRef = doc(db, 'refractories', logToEdit.refractoryId);
+        const targetStock = stocks.find(s => s.id === logToEdit.refractoryId);
+        if (targetStock) {
+          const updatedUnits = Math.max(0, targetStock.units + delta);
+          await updateDoc(stockRef, {
+            units: updatedUnits,
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+
+      enqueueSnackbar('Usage log updated successfully', { variant: 'success' });
+      setOpenEditLogModal(false);
+      setLogToEdit(null);
+    } catch (err) {
+      console.error("Error updating usage log:", err);
+      enqueueSnackbar("Failed to update log: " + err.message, { variant: 'error' });
+    } finally {
+      setSubmittingEditLog(false);
+    }
+  };
+
+  const handleOpenDeleteLog = (log) => {
+    setLogToDelete(log);
+    setOpenDeleteLogDialog(true);
+  };
+
+  const handleConfirmDeleteLog = async () => {
+    if (!logToDelete) return;
+    setSubmittingDeleteLog(true);
+    try {
+      await deleteDoc(doc(db, 'refractoryLogs', logToDelete.id));
+
+      // Restore units back to parent stock batch if exists
+      if (logToDelete.refractoryId) {
+        const targetStock = stocks.find(s => s.id === logToDelete.refractoryId);
+        if (targetStock) {
+          const restoredUnits = targetStock.units + Number(logToDelete.unitsUsed || 0);
+          await updateDoc(doc(db, 'refractories', logToDelete.refractoryId), {
+            units: restoredUnits,
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+
+      enqueueSnackbar('Usage log deleted and stock restored', { variant: 'success' });
+      setOpenDeleteLogDialog(false);
+      setLogToDelete(null);
+    } catch (err) {
+      console.error("Error deleting log:", err);
+      enqueueSnackbar("Failed to delete log: " + err.message, { variant: 'error' });
+    } finally {
+      setSubmittingDeleteLog(false);
+    }
+  };
 
   // 1. Fetch settings/dropdowns in real-time
   useEffect(() => {
@@ -95,7 +233,9 @@ export default function Refractory() {
         const data = docSnap.data();
         setDropdowns({
           lines: data.lines || ['SG#1', 'SG#2', 'SG#3.1', 'SG#3.2'],
-          refractoryTypes: data.refractoryTypes || ['Lip block', 'Moving block', 'Overflow block', 'Flat arc']
+          refractoryTypes: data.refractoryTypes || ['Lip block', 'Moving block', 'Overflow block', 'Flat arc'],
+          furnaceTypes: data.furnaceTypes || ['Cross fired', 'End fired'],
+          refractoryUnits: data.refractoryUnits || ['Set', 'Nos']
         });
       }
     });
@@ -141,23 +281,69 @@ export default function Refractory() {
     );
   }, [dropdowns.lines]);
 
-  // 4. Calculate Line-wise & Type-wise Summary Stock Matrix
-  const lineWiseSummary = useMemo(() => {
-    const lines = dropdowns.lines;
-    const types = dropdowns.refractoryTypes;
-    const summary = {};
+  // 4. Calculate Furnace-Type Wise & Line Dedication Summary Matrix with Unit Breakdown (Sets vs Nos)
+  const furnaceSummary = useMemo(() => {
+    const categories = ['End fired', 'Cross fired', 'Common'];
+    const types = dropdowns.refractoryTypes || ['Lip block', 'Moving block', 'Overflow block', 'Flat arc'];
+    
+    const summary = {
+      'End fired': { title: 'End Fired Furnace', subtitle: 'SG#1 & SG#2', sets: 0, nos: 0, items: {} },
+      'Cross fired': { title: 'Cross Fired Furnace', subtitle: 'SG#3 (SG#3.1 & SG#3.2)', sets: 0, nos: 0, items: {} },
+      'Common': { title: 'Common / Shared Stock', subtitle: 'General Spares', sets: 0, nos: 0, items: {} }
+    };
 
-    lines.forEach(line => {
-      summary[line] = {};
-      types.forEach(type => {
-        summary[line][type] = 0;
+    categories.forEach(cat => {
+      types.forEach(t => {
+        summary[cat].items[t] = {
+          sets: 0,
+          nos: 0,
+          lines: {}
+        };
       });
     });
 
     stocks.forEach(stock => {
-      if (stock.units > 0 && summary[stock.line] && summary[stock.line][stock.type] !== undefined) {
-        summary[stock.line][stock.type] += Number(stock.units);
+      const qty = Number(stock.units || 0);
+      if (qty <= 0) return;
+
+      let cat = 'Common';
+      const line = stock.line || '';
+      const furnaceType = stock.furnaceType || '';
+
+      if (furnaceType === 'End fired' || ['SG#1', 'SG#2'].includes(line)) {
+        cat = 'End fired';
+      } else if (furnaceType === 'Cross fired' || ['SG#3', 'SG#3.1', 'SG#3.2'].includes(line)) {
+        cat = 'Cross fired';
       }
+
+      const isSet = (stock.unit || '').toLowerCase().includes('set');
+      const unitKey = isSet ? 'sets' : 'nos';
+      const typeName = stock.type || 'Other';
+
+      if (!summary[cat].items[typeName]) {
+        summary[cat].items[typeName] = { sets: 0, nos: 0, lines: {} };
+      }
+
+      summary[cat][unitKey] += qty;
+      summary[cat].items[typeName][unitKey] += qty;
+
+      let lineLabel = line;
+      if (cat === 'Cross fired') {
+        // All Cross Fired stock maps directly to SG#3 (no Shared in Cross Fired)
+        lineLabel = 'SG#3';
+      } else if (cat === 'End fired') {
+        // For End Fired, if line is not explicitly SG#1 or SG#2, it is Shared
+        if (line !== 'SG#1' && line !== 'SG#2') {
+          lineLabel = 'Shared';
+        }
+      } else {
+        lineLabel = line || 'Shared';
+      }
+
+      if (!summary[cat].items[typeName].lines[lineLabel]) {
+        summary[cat].items[typeName].lines[lineLabel] = { sets: 0, nos: 0 };
+      }
+      summary[cat].items[typeName].lines[lineLabel][unitKey] += qty;
     });
 
     return summary;
@@ -167,12 +353,34 @@ export default function Refractory() {
   const filteredStocks = useMemo(() => {
     return stocks.filter(stock => {
       const matchesSearch =
-        stock.supplierName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        stock.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        stock.line.toLowerCase().includes(searchTerm.toLowerCase());
+        (stock.supplierName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (stock.type || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (stock.line || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (stock.furnaceType || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (stock.materialCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (stock.unit || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (stock.description || '').toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesType = selectedTypeFilter === "All" || stock.type === selectedTypeFilter;
-      const matchesLine = selectedLineFilter === "All" || stock.line === selectedLineFilter;
+
+      let matchesLine = true;
+      if (selectedLineFilter === "All") {
+        matchesLine = true;
+      } else if (selectedLineFilter === "End Fired") {
+        matchesLine = stock.furnaceType === "End fired" || stock.line === "SG#1" || stock.line === "SG#2";
+      } else if (selectedLineFilter === "Cross Fired") {
+        matchesLine = stock.furnaceType === "Cross fired" || stock.line === "SG#3" || stock.line === "SG#3.1" || stock.line === "SG#3.2";
+      } else if (selectedLineFilter === "SG#1") {
+        matchesLine = stock.line === "SG#1";
+      } else if (selectedLineFilter === "SG#2") {
+        matchesLine = stock.line === "SG#2";
+      } else if (selectedLineFilter === "SG#3") {
+        matchesLine = stock.line === "SG#3" || stock.line === "SG#3.1" || stock.line === "SG#3.2";
+      } else if (selectedLineFilter === "Common") {
+        matchesLine = !stock.line || stock.line === "Common" || stock.line === "Unassigned";
+      } else {
+        matchesLine = stock.line === selectedLineFilter;
+      }
 
       // Only display items that have stock remaining
       return matchesSearch && matchesType && matchesLine && stock.units > 0;
@@ -263,29 +471,29 @@ export default function Refractory() {
         </Box>
       </Box>
 
-      {/* Section 1: Modern Line-wise Summary (Replacement for standard tables) */}
+      {/* Section 1: Modern Furnace-Type Wise Summary */}
       <Typography variant="h5" fontWeight="bold" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-        <FactoryIcon color="primary" /> Line-Wise Stock Status
+        <LocalFireDepartmentIcon color="primary" /> Furnace-Type Stock Status
       </Typography>
 
       {loading ? (
         <Box
           display="flex"
-          flexDirection={{ xs: 'column', sm: 'row' }}
+          flexDirection={{ xs: 'column', md: 'row' }}
           flexWrap="wrap"
           gap={3}
           mb={5}
           width="100%"
         >
-          {[1, 2, 3, 4].map(idx => (
+          {[1, 2, 3].map(idx => (
             <Skeleton
               key={idx}
               animation="wave"
               variant="rounded"
-              height={160}
+              height={220}
               sx={{
                 borderRadius: 3,
-                flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(25% - 18px)' }
+                flex: { xs: '1 1 100%', md: '1 1 calc(33.33% - 16px)' }
               }}
             />
           ))}
@@ -293,69 +501,177 @@ export default function Refractory() {
       ) : (
         <Box
           display="flex"
-          flexDirection={{ xs: 'column', sm: 'row' }}
+          flexDirection={{ xs: 'column', md: 'row' }}
           flexWrap="wrap"
           gap={3}
           mb={5}
           width="100%"
         >
-          {sortedLines.map(line => {
-            const lineSummary = lineWiseSummary[line] || {};
-            const totalLineUnits = Object.values(lineSummary).reduce((a, b) => a + b, 0);
+          {['End fired', 'Cross fired', 'Common'].map(cat => {
+            const catData = furnaceSummary[cat];
+            const sets = catData?.sets || 0;
+            const nos = catData?.nos || 0;
+
+            let totalLabel = "0 Total";
+            if (sets > 0 && nos > 0) totalLabel = `${sets} Sets | ${nos} Nos`;
+            else if (sets > 0) totalLabel = `${sets} ${sets === 1 ? 'Set' : 'Sets'}`;
+            else if (nos > 0) totalLabel = `${nos} ${nos === 1 ? 'No' : 'Nos'}`;
+
+            const isZero = sets === 0 && nos === 0;
 
             return (
               <Card
-                key={line}
+                key={cat}
                 elevation={3}
                 sx={{
-                  flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 12px)', md: '1 1 calc(25% - 18px)' },
+                  flex: { xs: '1 1 100%', md: '1 1 calc(33.33% - 16px)' },
                   borderRadius: 4,
                   background: 'linear-gradient(135deg, #ffffff 0%, #f9fbfd 100%)',
                   border: '1px solid #e3edf7',
                   transition: 'all 0.3s ease-in-out',
                   '&:hover': {
-                    transform: 'translateY(-5px)',
+                    transform: 'translateY(-4px)',
                     boxShadow: '0 12px 20px rgba(0,0,0,0.08)'
                   }
                 }}
               >
                 <CardContent sx={{ p: 2.5 }}>
                   {/* Header */}
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                    <Typography variant="h6" fontWeight="bold" color="text.primary">
-                      {line}
-                    </Typography>
+                  <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
+                    <Box>
+                      <Typography variant="h6" fontWeight="bold" color="text.primary" sx={{ lineHeight: 1.2 }}>
+                        {catData.title}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" fontWeight="medium">
+                        {catData.subtitle}
+                      </Typography>
+                    </Box>
                     <Chip
-                      label={`${totalLineUnits} Total`}
-                      color={totalLineUnits === 0 ? "default" : totalLineUnits < 15 ? "warning" : "primary"}
+                      label={totalLabel}
+                      color={isZero ? "default" : "primary"}
                       size="small"
-                      sx={{ fontWeight: 'bold' }}
+                      sx={{ fontWeight: 'bold', fontSize: '0.75rem' }}
                     />
                   </Box>
 
-                  {/* Stock Details */}
-                  <Stack spacing={1.5}>
+                  {/* Stock Details per Refractory Type */}
+                  <Stack spacing={2} sx={{ mt: 1 }}>
                     {dropdowns.refractoryTypes.map(type => {
-                      const count = lineSummary[type] || 0;
-                      const status = getStockStatus(count);
-                      return (
-                        <Box key={type} display="flex" justifyContent="space-between" alignItems="center">
-                          <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1, pr: 1, lineHeight: 1.2 }}>
-                            {type}
-                          </Typography>
-                          <Box display="flex" alignItems="center" gap={1} sx={{ minWidth: 'fit-content' }}>
-                            <Typography variant="body2" fontWeight="bold" color={status.color === 'error' ? 'error.main' : 'text.primary'}>
-                              {count} {count === 1 ? 'unit' : 'units'}
-                            </Typography>
-                            <Box
+                      const itemData = catData.items[type] || { sets: 0, nos: 0, lines: {} };
+                      const itemSets = itemData.sets;
+                      const itemNos = itemData.nos;
+                      const itemTotal = itemSets + itemNos;
+
+                      const status = getStockStatus(itemTotal);
+
+                      // Helper to render Sets | Nos pair in a strict 3-column Grid for perfect vertical column alignment
+                      const renderSetsAndNosPair = (sCount, nCount, isHeaderRow = false) => {
+                        const isSetZero = sCount === 0;
+                        const isNosZero = nCount === 0;
+
+                        return (
+                          <Box
+                            display="inline-grid"
+                            gridTemplateColumns="60px 14px 60px"
+                            alignItems="center"
+                            sx={{ minWidth: 134 }}
+                          >
+                            <Typography
+                              variant="caption"
+                              align="right"
                               sx={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: '50%',
-                                bgcolor: `${status.color}.main`
+                                fontWeight: 'bold',
+                                color: isSetZero ? '#b0bec5' : 'text.primary',
+                                fontSize: isHeaderRow ? '0.85rem' : '0.75rem'
                               }}
-                            />
+                            >
+                              {sCount} {sCount === 1 ? 'Set' : 'Sets'}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              align="center"
+                              sx={{
+                                color: '#cfd8dc',
+                                fontWeight: 'bold',
+                                fontSize: isHeaderRow ? '0.85rem' : '0.75rem'
+                              }}
+                            >
+                              |
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              align="right"
+                              sx={{
+                                fontWeight: 'bold',
+                                color: isNosZero ? '#b0bec5' : 'text.primary',
+                                fontSize: isHeaderRow ? '0.85rem' : '0.75rem'
+                              }}
+                            >
+                              {nCount} {nCount === 1 ? 'No' : 'Nos'}
+                            </Typography>
                           </Box>
+                        );
+                      };
+
+                      // Lines to display for this item
+                      let linesToRender = [];
+                      if (cat === 'End fired') {
+                        linesToRender = ['SG#1', 'SG#2'];
+                        if (itemData.lines['Shared'] && (itemData.lines['Shared'].sets > 0 || itemData.lines['Shared'].nos > 0)) {
+                          linesToRender.push('Shared');
+                        }
+                      } else if (cat === 'Cross fired') {
+                        linesToRender = ['SG#3'];
+                      } else {
+                        linesToRender = Object.keys(itemData.lines).filter(l => (itemData.lines[l].sets > 0 || itemData.lines[l].nos > 0));
+                        if (linesToRender.length === 0) linesToRender = ['Shared'];
+                      }
+
+                      return (
+                        <Box key={type} sx={{ pb: 1, borderBottom: '1px dashed #edeef2', '&:last-child': { borderBottom: 0, pb: 0 } }}>
+                          {/* Item Main Row */}
+                          <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
+                            <Box display="flex" alignItems="center" gap={1}>
+                              <Box
+                                sx={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: '50%',
+                                  bgcolor: `${status.color}.main`,
+                                  flexShrink: 0
+                                }}
+                              />
+                              <Typography variant="body2" fontWeight="bold" color="text.primary" sx={{ lineHeight: 1.2 }}>
+                                {type}
+                              </Typography>
+                            </Box>
+                            {renderSetsAndNosPair(itemSets, itemNos, true)}
+                          </Box>
+
+                          {/* Sub-Rows for Line Breakdown */}
+                          {itemTotal > 0 && linesToRender.length > 0 && (
+                            <Stack spacing={0.5} sx={{ pl: 2, mt: 0.5, borderLeft: '2px solid #e0e0e0' }}>
+                              {linesToRender.map(lineKey => {
+                                const lData = itemData.lines[lineKey] || { sets: 0, nos: 0 };
+                                const lSets = lData.sets || 0;
+                                const lNos = lData.nos || 0;
+                                const isShared = lineKey === 'Shared' || lineKey === 'Common' || !lineKey;
+
+                                return (
+                                  <Box key={lineKey} display="flex" justifyContent="space-between" alignItems="center">
+                                    <Typography
+                                      variant="caption"
+                                      fontWeight="bold"
+                                      color={isShared ? "text.secondary" : lineKey.includes('1') ? "info.main" : lineKey.includes('2') ? "success.main" : "warning.main"}
+                                    >
+                                      {isShared ? 'Shared:' : `${lineKey}:`}
+                                    </Typography>
+                                    {renderSetsAndNosPair(lSets, lNos, false)}
+                                  </Box>
+                                );
+                              })}
+                            </Stack>
+                          )}
                         </Box>
                       );
                     })}
@@ -422,10 +738,10 @@ export default function Refractory() {
             </TextField>
           </Grid>
 
-          <Grid item xs={12} sm={8} md={5}>
+          <Grid item xs={12} sm={8} md={6}>
             <Box display="flex" alignItems="center" gap={1.5}>
               <Typography variant="body2" color="text.secondary" fontWeight="bold" sx={{ minWidth: 'fit-content' }}>
-                Line:
+                Filter:
               </Typography>
               <ToggleButtonGroup
                 value={selectedLineFilter}
@@ -442,6 +758,7 @@ export default function Refractory() {
                   width: '100%',
                   display: 'flex',
                   borderRadius: 2,
+                  flexWrap: 'wrap',
                   boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                   '& .MuiToggleButton-root': {
                     flex: 1,
@@ -449,8 +766,9 @@ export default function Refractory() {
                     fontWeight: 'bold',
                     border: '1px solid #e0e0e0',
                     py: 0.75,
-                    px: 1.5,
+                    px: 1,
                     color: 'text.secondary',
+                    fontSize: '0.8rem',
                     transition: 'all 0.2s',
                     '&.Mui-selected': {
                       bgcolor: 'primary.main',
@@ -463,22 +781,13 @@ export default function Refractory() {
                   }
                 }}
               >
-                <ToggleButton value="All" sx={{ borderTopLeftRadius: '8px !important', borderBottomLeftRadius: '8px !important' }}> All </ToggleButton>
-                {sortedLines.map((l, index) => {
-                  const isLast = index === sortedLines.length - 1;
-                  return (
-                    <ToggleButton
-                      key={l}
-                      value={l}
-                      sx={{
-                        borderTopRightRadius: isLast ? '8px !important' : '0',
-                        borderBottomRightRadius: isLast ? '8px !important' : '0'
-                      }}
-                    >
-                      {l}
-                    </ToggleButton>
-                  );
-                })}
+                <ToggleButton value="All"> All </ToggleButton>
+                <ToggleButton value="End Fired"> End Fired </ToggleButton>
+                <ToggleButton value="Cross Fired"> Cross Fired </ToggleButton>
+                <ToggleButton value="SG#1"> SG#1 </ToggleButton>
+                <ToggleButton value="SG#2"> SG#2 </ToggleButton>
+                <ToggleButton value="SG#3"> SG#3 </ToggleButton>
+                <ToggleButton value="Common"> Common </ToggleButton>
               </ToggleButtonGroup>
             </Box>
           </Grid>
@@ -540,21 +849,41 @@ export default function Refractory() {
                     gap={2}
                     width="100%"
                   >
-                    {/* Column 1: Type & Supplier */}
-                    <Box sx={{ width: { xs: '100%', md: '25%' } }}>
+                    {/* Column 1: Type, Supplier, Material Code & Description */}
+                    <Box sx={{ width: { xs: '100%', md: '30%' } }}>
                       <Typography variant="subtitle1" fontWeight="bold" color="primary">
                         {stock.type}
                       </Typography>
+                      {stock.materialCode && (
+                        <Typography variant="caption" color="primary.main" fontWeight="bold" display="block">
+                          Code: {stock.materialCode}
+                        </Typography>
+                      )}
                       <Typography variant="body2" color="text.secondary">
-                        Supplier: <strong>{stock.supplierName}</strong>
+                        Supplier: <strong>{stock.supplierName || 'N/A'}</strong>
                       </Typography>
+                      {stock.description && (
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ fontStyle: 'italic', mt: 0.5 }}>
+                          "{stock.description}"
+                        </Typography>
+                      )}
                     </Box>
 
-                    {/* Column 2: Line Chip */}
-                    <Box sx={{ width: { xs: 'auto', md: '15%' } }}>
+                    {/* Column 2: Furnace Type & Line Chips */}
+                    <Box sx={{ width: { xs: 'auto', md: '20%' }, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                      {stock.furnaceType && (
+                        <Chip
+                          icon={<LocalFireDepartmentIcon color="error" />}
+                          label={stock.furnaceType}
+                          variant="outlined"
+                          size="small"
+                          color="warning"
+                          sx={{ borderRadius: 1.5, fontWeight: 'bold' }}
+                        />
+                      )}
                       <Chip
                         icon={<FactoryIcon />}
-                        label={stock.line}
+                        label={stock.line || 'Unassigned'}
                         variant="outlined"
                         size="small"
                         sx={{ borderRadius: 1.5 }}
@@ -562,10 +891,10 @@ export default function Refractory() {
                     </Box>
 
                     {/* Column 3: Units / Progress */}
-                    <Box sx={{ width: { xs: '100%', md: '25%' } }}>
+                    <Box sx={{ width: { xs: '100%', md: '20%' } }}>
                       <Box display="flex" justifyContent="space-between" mb={0.5}>
                         <Typography variant="body2" fontWeight="bold" color="text.primary">
-                          {stock.units} / {stock.initialUnits} Units
+                          {stock.units} / {stock.initialUnits} {stock.unit || 'Units'}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
                           {Math.round(percentRemaining)}% Left
@@ -591,8 +920,8 @@ export default function Refractory() {
                       </Typography>
                     </Box>
 
-                    {/* Column 5: Use Button */}
-                    <Box sx={{ width: { xs: '100%', md: '15%' }, display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
+                    {/* Column 5: Actions (Use / Edit / Delete) */}
+                    <Box sx={{ width: { xs: '100%', md: '25%' }, display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' }, alignItems: 'center', gap: 1 }}>
                       {canAdd && (
                         <Button
                           variant="contained"
@@ -604,6 +933,30 @@ export default function Refractory() {
                         >
                           Use Stock
                         </Button>
+                      )}
+                      {isAdmin && (
+                        <>
+                          <Tooltip title="Edit Batch (Admin Only)">
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              onClick={() => handleOpenEditForm(stock)}
+                              sx={{ bgcolor: '#e3f2fd', '&:hover': { bgcolor: '#bbdefb' } }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete Batch (Admin Only)">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => handleOpenDeleteStock(stock)}
+                              sx={{ bgcolor: '#ffebee', '&:hover': { bgcolor: '#ffcdd2' } }}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </>
                       )}
                     </Box>
                   </Box>
@@ -634,13 +987,17 @@ export default function Refractory() {
                 <TableHead sx={{ bgcolor: '#f5f5f5' }}>
                   <TableRow>
                     <TableCell><strong>Date & Time</strong></TableCell>
+                    <TableCell><strong>Material Code</strong></TableCell>
                     <TableCell><strong>Refractory Type</strong></TableCell>
+                    <TableCell><strong>Furnace Type</strong></TableCell>
                     <TableCell><strong>Line</strong></TableCell>
                     <TableCell align="right"><strong>Qty Added</strong></TableCell>
                     <TableCell align="right"><strong>Remaining</strong></TableCell>
                     <TableCell><strong>Supplier</strong></TableCell>
+                    <TableCell><strong>Description</strong></TableCell>
                     <TableCell><strong>Added By</strong></TableCell>
                     <TableCell><strong>Status</strong></TableCell>
+                    {isAdmin && <TableCell align="center"><strong>Actions (Admin)</strong></TableCell>}
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -651,19 +1008,30 @@ export default function Refractory() {
                           ? format(new Date(stock.createdAt.seconds * 1000), 'dd/MM/yyyy HH:mm')
                           : 'Just now'}
                       </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold' }}>
+                        {stock.materialCode || '-'}
+                      </TableCell>
                       <TableCell sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                         {stock.type}
                       </TableCell>
                       <TableCell>
-                        <Chip label={stock.line} size="small" sx={{ borderRadius: 1 }} />
+                        {stock.furnaceType ? (
+                          <Chip label={stock.furnaceType} size="small" color="warning" variant="outlined" />
+                        ) : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={stock.line || 'Unassigned'} size="small" sx={{ borderRadius: 1 }} />
                       </TableCell>
                       <TableCell align="right" sx={{ fontWeight: 'bold', color: 'success.main' }}>
-                        +{stock.initialUnits}
+                        +{stock.initialUnits} {stock.unit || ''}
                       </TableCell>
                       <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                        {stock.units}
+                        {stock.units} {stock.unit || ''}
                       </TableCell>
-                      <TableCell>{stock.supplierName}</TableCell>
+                      <TableCell>{stock.supplierName || '-'}</TableCell>
+                      <TableCell sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                        {stock.description || '-'}
+                      </TableCell>
                       <TableCell>
                         <Box display="flex" alignItems="center" gap={0.5}>
                           <AccountCircleIcon fontSize="inherit" color="action" />
@@ -678,6 +1046,22 @@ export default function Refractory() {
                           variant={stock.units > 0 ? 'filled' : 'outlined'}
                         />
                       </TableCell>
+                      {isAdmin && (
+                        <TableCell align="center">
+                          <Stack direction="row" spacing={0.5} justifyContent="center">
+                            <Tooltip title="Edit Stock (Admin)">
+                              <IconButton size="small" color="primary" onClick={() => handleOpenEditForm(stock)}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete Stock (Admin)">
+                              <IconButton size="small" color="error" onClick={() => handleOpenDeleteStock(stock)}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -711,6 +1095,7 @@ export default function Refractory() {
                     <TableCell><strong>Supplier Batch</strong></TableCell>
                     <TableCell><strong>User</strong></TableCell>
                     <TableCell><strong>Remarks / Purpose</strong></TableCell>
+                    {isAdmin && <TableCell align="center"><strong>Actions (Admin)</strong></TableCell>}
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -737,9 +1122,25 @@ export default function Refractory() {
                           <Typography variant="body2">{log.usedBy?.split('@')[0]}</Typography>
                         </Box>
                       </TableCell>
-                      <TableCell italic="true" color="text.secondary">
+                      <TableCell sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
                         {log.remarks || '-'}
                       </TableCell>
+                      {isAdmin && (
+                        <TableCell align="center">
+                          <Stack direction="row" spacing={0.5} justifyContent="center">
+                            <Tooltip title="Edit Usage Log (Admin)">
+                              <IconButton size="small" color="primary" onClick={() => handleOpenEditLog(log)}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete Usage Log (Admin)">
+                              <IconButton size="small" color="error" onClick={() => handleOpenDeleteLog(log)}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -759,17 +1160,21 @@ export default function Refractory() {
           color="primary"
           aria-label="add stock"
           sx={{ position: 'fixed', bottom: 32, right: 32, boxShadow: 4 }}
-          onClick={() => setOpenAddForm(true)}
+          onClick={handleOpenAddForm}
         >
           <AddIcon />
         </Fab>
       )}
 
-      {/* Dialog Form for Adding New Stock */}
+      {/* Dialog Form for Adding / Editing Stock */}
       <RefractoryForm
         open={openAddForm}
-        onClose={() => setOpenAddForm(false)}
+        onClose={() => {
+          setOpenAddForm(false);
+          setStockToEdit(null);
+        }}
         dropdowns={dropdowns}
+        editData={stockToEdit}
       />
 
       {/* Dialog for Consuming Stock (Use Stock) */}
@@ -841,6 +1246,124 @@ export default function Refractory() {
             sx={{ borderRadius: 2 }}
           >
             Confirm Consumption
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog for Admin Delete Stock Confirmation */}
+      <Dialog
+        open={openDeleteStockDialog}
+        onClose={() => setOpenDeleteStockDialog(false)}
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ bgcolor: 'error.main', color: 'white' }}>
+          Confirm Delete Stock Batch (Admin)
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          {stockToDelete && (
+            <Typography variant="body1">
+              Are you sure you want to permanently delete stock batch for <strong>{stockToDelete.type}</strong> ({stockToDelete.line || 'Unassigned'})? This action cannot be undone.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2.5 }}>
+          <Button onClick={() => setOpenDeleteStockDialog(false)} variant="outlined" color="inherit">
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmDeleteStock} variant="contained" color="error">
+            Delete Stock
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog for Admin Edit Usage Log */}
+      <Dialog
+        open={openEditLogModal}
+        onClose={() => setOpenEditLogModal(false)}
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ bgcolor: 'primary.main', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          Edit Stock Usage Log (Admin)
+          <IconButton onClick={() => setOpenEditLogModal(false)} sx={{ color: 'white' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          {logToEdit && (
+            <Stack spacing={3} sx={{ mt: 1 }}>
+              <Alert severity="info">
+                Editing usage log for <strong>{logToEdit.type}</strong> on <strong>{logToEdit.line}</strong> ({logToEdit.supplierName}).
+              </Alert>
+
+              <TextField
+                type="number"
+                label="Quantity Used (Units)"
+                fullWidth
+                value={editLogQty}
+                onChange={(e) => setEditLogQty(Math.max(1, Number(e.target.value)))}
+                InputProps={{
+                  inputProps: { min: 1 },
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <NumbersIcon color="action" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+
+              <TextField
+                label="Remarks / Purpose"
+                fullWidth
+                multiline
+                rows={2}
+                value={editLogRemarks}
+                onChange={(e) => setEditLogRemarks(e.target.value)}
+              />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2.5, bgcolor: '#f9f9f9' }}>
+          <Button onClick={() => setOpenEditLogModal(false)} variant="outlined" color="inherit">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmEditLog}
+            variant="contained"
+            color="primary"
+            disabled={submittingEditLog}
+          >
+            Update Log
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog for Admin Delete Usage Log Confirmation */}
+      <Dialog
+        open={openDeleteLogDialog}
+        onClose={() => setOpenDeleteLogDialog(false)}
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ bgcolor: 'error.main', color: 'white' }}>
+          Confirm Delete Usage Log (Admin)
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          {logToDelete && (
+            <Typography variant="body1">
+              Are you sure you want to delete this usage log entry of <strong>{logToDelete.unitsUsed} units</strong> for <strong>{logToDelete.type}</strong>? Deleting this log will restore <strong>{logToDelete.unitsUsed} units</strong> back to the stock batch.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2.5 }}>
+          <Button onClick={() => setOpenDeleteLogDialog(false)} variant="outlined" color="inherit">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmDeleteLog}
+            variant="contained"
+            color="error"
+            disabled={submittingDeleteLog}
+          >
+            Delete & Restore Stock
           </Button>
         </DialogActions>
       </Dialog>

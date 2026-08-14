@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -10,12 +10,13 @@ import {
   Stack,
   Box,
   InputAdornment,
-  IconButton
+  IconButton,
+  Grid
 } from '@mui/material';
 import { useForm, Controller } from 'react-hook-form';
 import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 import { useSnackbar } from 'notistack';
 
@@ -25,52 +26,129 @@ import CategoryIcon from '@mui/icons-material/Category';
 import FactoryIcon from '@mui/icons-material/Factory';
 import NumbersIcon from '@mui/icons-material/Numbers';
 import BusinessIcon from '@mui/icons-material/Business';
+import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
+import DescriptionIcon from '@mui/icons-material/Description';
+import QrCodeIcon from '@mui/icons-material/QrCode';
+import StraightenIcon from '@mui/icons-material/Straighten';
 
 const schema = yup.object().shape({
   type: yup.string().required("Refractory Type is required"),
-  line: yup.string().required("Production Line is required"),
+  furnaceType: yup.string().required("Furnace Type is required"),
+  line: yup.string().optional(),
   units: yup.number()
     .typeError("Units must be a number")
     .required("Units count is required")
-    .positive("Units must be greater than zero")
+    .min(0, "Units cannot be negative")
     .integer("Units must be an integer"),
-  supplierName: yup.string().required("Supplier Name is required"),
+  initialUnits: yup.number()
+    .typeError("Initial units must be a number")
+    .optional()
+    .min(1, "Initial units must be greater than zero"),
+  unit: yup.string().optional(),
+  materialCode: yup.string().optional(),
+  supplierName: yup.string().optional(),
+  description: yup.string().optional(),
 });
 
-export default function RefractoryForm({ open, onClose, dropdowns }) {
-  const { control, handleSubmit, reset, formState: { errors } } = useForm({
+const furnaceLineMap = {
+  'Cross fired': ['SG#3', 'SG#3.1', 'SG#3.2'],
+  'End fired': ['SG#1', 'SG#2']
+};
+
+export default function RefractoryForm({ open, onClose, dropdowns, editData = null }) {
+  const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm({
     resolver: yupResolver(schema),
-    defaultValues: { type: '', line: '', units: 1, supplierName: '' }
+    defaultValues: { type: '', furnaceType: '', line: '', units: 1, initialUnits: 1, unit: 'Pcs', materialCode: '', supplierName: '', description: '' }
   });
 
   const { enqueueSnackbar } = useSnackbar();
 
+  const selectedFurnaceType = watch('furnaceType');
+  const selectedLine = watch('line');
+
+  const refractoryTypesOptions = dropdowns?.refractoryTypes || ['Lip block', 'Moving block', 'Overflow block', 'Flat arc'];
+  const furnaceTypesOptions = dropdowns?.furnaceTypes || ['Cross fired', 'End fired'];
+  const allLineOptions = dropdowns?.lines || ['SG#1', 'SG#2', 'SG#3', 'SG#3.1', 'SG#3.2'];
+  const unitOptions = dropdowns?.refractoryUnits || ['Set', 'Nos'];
+
+  // Filter lines based on selected furnace type
+  const filteredLineOptions = useMemo(() => {
+    if (selectedFurnaceType && furnaceLineMap[selectedFurnaceType]) {
+      const allowedLines = furnaceLineMap[selectedFurnaceType];
+      return allLineOptions.filter(l => allowedLines.includes(l));
+    }
+    return allLineOptions;
+  }, [selectedFurnaceType, allLineOptions]);
+
+  // Clear line if current selected line is not valid for furnace type, or auto-set SG#3 for Cross fired
+  useEffect(() => {
+    if (selectedFurnaceType === 'Cross fired' && !selectedLine) {
+      setValue('line', 'SG#3');
+    } else if (selectedLine && !filteredLineOptions.includes(selectedLine)) {
+      setValue('line', '');
+    }
+  }, [selectedFurnaceType, selectedLine, filteredLineOptions, setValue]);
+
   useEffect(() => {
     if (open) {
-      reset({ type: '', line: '', units: 1, supplierName: '' });
+      if (editData) {
+        reset({
+          type: editData.type || '',
+          furnaceType: editData.furnaceType || '',
+          line: editData.line || '',
+          units: editData.units ?? 1,
+          initialUnits: editData.initialUnits ?? editData.units ?? 1,
+          unit: editData.unit || unitOptions[0] || 'Set',
+          materialCode: editData.materialCode || '',
+          supplierName: editData.supplierName || '',
+          description: editData.description || ''
+        });
+      } else {
+        reset({ type: '', furnaceType: '', line: '', units: 1, initialUnits: 1, unit: unitOptions[0] || 'Set', materialCode: '', supplierName: '', description: '' });
+      }
     }
-  }, [open, reset]);
+  }, [open, editData, reset, unitOptions]);
 
   const onSubmit = async (data) => {
     try {
-      await addDoc(collection(db, 'refractories'), {
-        type: data.type,
-        line: data.line,
-        units: Number(data.units),
-        initialUnits: Number(data.units),
-        supplierName: data.supplierName,
-        createdBy: auth.currentUser?.email || 'Unknown',
-        createdAt: serverTimestamp()
-      });
-      enqueueSnackbar('Refractory stock added successfully', { variant: 'success' });
+      if (editData) {
+        const docRef = doc(db, 'refractories', editData.id);
+        const newInitialUnits = Number(data.initialUnits || data.units);
+        await updateDoc(docRef, {
+          type: data.type,
+          furnaceType: data.furnaceType,
+          line: data.line || '',
+          units: Number(data.units),
+          initialUnits: newInitialUnits,
+          unit: data.unit || 'Set',
+          materialCode: data.materialCode || '',
+          supplierName: data.supplierName || '',
+          description: data.description || '',
+          updatedAt: serverTimestamp(),
+          updatedBy: auth.currentUser?.email || 'Unknown'
+        });
+        enqueueSnackbar('Refractory stock updated successfully', { variant: 'success' });
+      } else {
+        await addDoc(collection(db, 'refractories'), {
+          type: data.type,
+          furnaceType: data.furnaceType,
+          line: data.line || '',
+          units: Number(data.units),
+          initialUnits: Number(data.units),
+          unit: data.unit || 'Set',
+          materialCode: data.materialCode || '',
+          supplierName: data.supplierName || '',
+          description: data.description || '',
+          createdBy: auth.currentUser?.email || 'Unknown',
+          createdAt: serverTimestamp()
+        });
+        enqueueSnackbar('Refractory stock added successfully', { variant: 'success' });
+      }
       onClose();
     } catch (err) {
       enqueueSnackbar('Error saving refractory: ' + err.message, { variant: 'error' });
     }
   };
-
-  const refractoryTypesOptions = dropdowns?.refractoryTypes || ['Lip block', 'Moving block', 'Overflow block', 'Flat arc'];
-  const lineOptions = dropdowns?.lines || ['SG#1', 'SG#2', 'SG#3.1', 'SG#3.2'];
 
   return (
     <Dialog
@@ -83,13 +161,13 @@ export default function RefractoryForm({ open, onClose, dropdowns }) {
       }}
     >
       <DialogTitle sx={{
-        bgcolor: 'primary.main',
+        bgcolor: editData ? 'secondary.main' : 'primary.main',
         color: 'white',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-        Add Refractory Stock
+        {editData ? 'Edit Refractory Stock' : 'Add Refractory Stock'}
         <IconButton onClick={onClose} sx={{ color: 'white' }}>
           <CloseIcon />
         </IconButton>
@@ -128,7 +206,36 @@ export default function RefractoryForm({ open, onClose, dropdowns }) {
                 )}
               />
 
-              {/* Line Select */}
+              {/* Furnace Type Select (Required) */}
+              <Controller
+                name="furnaceType"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    select
+                    label="Furnace Type *"
+                    fullWidth
+                    error={!!errors.furnaceType}
+                    helperText={errors.furnaceType?.message}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <LocalFireDepartmentIcon color="error" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  >
+                    {furnaceTypesOptions.map((ft) => (
+                      <MenuItem key={ft} value={ft}>
+                        {ft}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                )}
+              />
+
+              {/* Line Select (Optional, filtered by Furnace Type) */}
               <Controller
                 name="line"
                 control={control}
@@ -136,10 +243,15 @@ export default function RefractoryForm({ open, onClose, dropdowns }) {
                   <TextField
                     {...field}
                     select
-                    label="Production Line"
+                    label="Production Line (Optional)"
                     fullWidth
                     error={!!errors.line}
-                    helperText={errors.line?.message}
+                    helperText={
+                      errors.line?.message ||
+                      (selectedFurnaceType
+                        ? `Showing lines for ${selectedFurnaceType}`
+                        : "Select furnace type to filter lines")
+                    }
                     InputProps={{
                       startAdornment: (
                         <InputAdornment position="start">
@@ -148,7 +260,10 @@ export default function RefractoryForm({ open, onClose, dropdowns }) {
                       ),
                     }}
                   >
-                    {lineOptions.map((line) => (
+                    <MenuItem value="">
+                      <em>None / Unassigned</em>
+                    </MenuItem>
+                    {filteredLineOptions.map((line) => (
                       <MenuItem key={line} value={line}>
                         {line}
                       </MenuItem>
@@ -157,23 +272,22 @@ export default function RefractoryForm({ open, onClose, dropdowns }) {
                 )}
               />
 
-              {/* Units Input */}
+              {/* Material Code Input (Optional) */}
               <Controller
-                name="units"
+                name="materialCode"
                 control={control}
                 render={({ field }) => (
                   <TextField
                     {...field}
-                    type="number"
-                    label="Quantity (Units)"
+                    label="Material Code (Optional)"
                     fullWidth
-                    error={!!errors.units}
-                    helperText={errors.units?.message}
+                    placeholder="Enter material / SAP code"
+                    error={!!errors.materialCode}
+                    helperText={errors.materialCode?.message}
                     InputProps={{
-                      inputProps: { min: 1 },
                       startAdornment: (
                         <InputAdornment position="start">
-                          <NumbersIcon color="action" />
+                          <QrCodeIcon color="action" />
                         </InputAdornment>
                       ),
                     }}
@@ -181,14 +295,71 @@ export default function RefractoryForm({ open, onClose, dropdowns }) {
                 )}
               />
 
-              {/* Supplier Name Input */}
+              {/* Quantity (Units) & Unit of Measure side by side */}
+              <Grid container spacing={2}>
+                <Grid item xs={7}>
+                  <Controller
+                    name="units"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        type="number"
+                        label="Quantity *"
+                        fullWidth
+                        error={!!errors.units}
+                        helperText={errors.units?.message}
+                        InputProps={{
+                          inputProps: { min: 1 },
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <NumbersIcon color="action" />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    )}
+                  />
+                </Grid>
+                <Grid item xs={5}>
+                  <Controller
+                    name="unit"
+                    control={control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        select
+                        label="Unit"
+                        fullWidth
+                        error={!!errors.unit}
+                        helperText={errors.unit?.message}
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <StraightenIcon color="action" />
+                            </InputAdornment>
+                          ),
+                        }}
+                      >
+                        {unitOptions.map((u) => (
+                          <MenuItem key={u} value={u}>
+                            {u}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    )}
+                  />
+                </Grid>
+              </Grid>
+
+              {/* Supplier Name Input (Optional) */}
               <Controller
                 name="supplierName"
                 control={control}
                 render={({ field }) => (
                   <TextField
                     {...field}
-                    label="Supplier Name"
+                    label="Supplier Name (Optional)"
                     fullWidth
                     placeholder="Enter supplier name"
                     error={!!errors.supplierName}
@@ -197,6 +368,31 @@ export default function RefractoryForm({ open, onClose, dropdowns }) {
                       startAdornment: (
                         <InputAdornment position="start">
                           <BusinessIcon color="action" />
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                )}
+              />
+
+              {/* Description Input (Optional) */}
+              <Controller
+                name="description"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    label="Description (Optional)"
+                    fullWidth
+                    multiline
+                    rows={2}
+                    placeholder="Enter description or notes..."
+                    error={!!errors.description}
+                    helperText={errors.description?.message}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <DescriptionIcon color="action" />
                         </InputAdornment>
                       ),
                     }}
@@ -214,10 +410,11 @@ export default function RefractoryForm({ open, onClose, dropdowns }) {
           <Button
             type="submit"
             variant="contained"
+            color={editData ? 'secondary' : 'primary'}
             size="large"
             sx={{ minWidth: 120, borderRadius: 2 }}
           >
-            Add Stock
+            {editData ? 'Update Stock' : 'Add Stock'}
           </Button>
         </DialogActions>
       </form>

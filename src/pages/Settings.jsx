@@ -75,7 +75,9 @@ export default function Settings() {
     activityTypes: [],
     lines: [],
     designPatterns: [],
-    refractoryTypes: []
+    refractoryTypes: [],
+    furnaceTypes: [],
+    refractoryUnits: []
   });
   const [newOption, setNewOption] = useState('');
   const [selectedDropdown, setSelectedDropdown] = useState('activityTypes');
@@ -132,10 +134,26 @@ export default function Settings() {
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
+        let needsUpdate = false;
         // Automatically migrate refractoryTypes if missing
         if (!data.refractoryTypes) {
           data.refractoryTypes = ['Lip block', 'Moving block', 'Overflow block', 'Flat arc'];
-          await updateDoc(docRef, { refractoryTypes: data.refractoryTypes });
+          needsUpdate = true;
+        }
+        if (!data.furnaceTypes) {
+          data.furnaceTypes = ['Cross fired', 'End fired'];
+          needsUpdate = true;
+        }
+        if (!data.refractoryUnits) {
+          data.refractoryUnits = ['Set', 'Nos'];
+          needsUpdate = true;
+        }
+        if (needsUpdate) {
+          await updateDoc(docRef, {
+            refractoryTypes: data.refractoryTypes,
+            furnaceTypes: data.furnaceTypes,
+            refractoryUnits: data.refractoryUnits
+          });
         }
         setDropdowns(data);
       } else {
@@ -143,7 +161,9 @@ export default function Settings() {
           activityTypes: ['Production Start', 'Production End', 'Roller Sent', 'Roller Received'],
           lines: ['SG#1', 'SG#2', 'SG#3.1', 'SG#3.2'],
           designPatterns: ['Pattern A', 'Pattern B'],
-          refractoryTypes: ['Lip block', 'Moving block', 'Overflow block', 'Flat arc']
+          refractoryTypes: ['Lip block', 'Moving block', 'Overflow block', 'Flat arc'],
+          furnaceTypes: ['Cross fired', 'End fired'],
+          refractoryUnits: ['Set', 'Nos']
         };
         await setDoc(docRef, initialData);
         setDropdowns(initialData);
@@ -312,7 +332,9 @@ export default function Settings() {
     activityTypes: 'Activity Types',
     lines: 'Production Lines',
     designPatterns: 'Design Patterns',
-    refractoryTypes: 'Refractory Types'
+    refractoryTypes: 'Refractory Types',
+    furnaceTypes: 'Furnace Types',
+    refractoryUnits: 'Refractory Units'
   };
 
   // Alert Config State
@@ -449,6 +471,8 @@ export default function Settings() {
                   <MenuItem value="lines">Production Lines</MenuItem>
                   <MenuItem value="designPatterns">Design Patterns</MenuItem>
                   <MenuItem value="refractoryTypes">Refractory Types</MenuItem>
+                  <MenuItem value="furnaceTypes">Furnace Types</MenuItem>
+                  <MenuItem value="refractoryUnits">Refractory Units</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
