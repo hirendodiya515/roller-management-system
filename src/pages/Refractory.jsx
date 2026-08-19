@@ -53,6 +53,7 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import LocalFireDepartmentIcon from '@mui/icons-material/LocalFireDepartment';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import ReportProblemIcon from '@mui/icons-material/ReportProblem';
 
 import { collection, onSnapshot, query, orderBy, doc, updateDoc, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -104,6 +105,28 @@ export default function Refractory() {
   const [logToDelete, setLogToDelete] = useState(null);
   const [openDeleteLogDialog, setOpenDeleteLogDialog] = useState(false);
   const [submittingDeleteLog, setSubmittingDeleteLog] = useState(false);
+
+  // Rejection Logs & Modal States
+  const [rejectionLogs, setRejectionLogs] = useState([]);
+  const [openRejectForm, setOpenRejectForm] = useState(false);
+  const [selectedStockForReject, setSelectedStockForReject] = useState(null);
+  const [rejectQuantity, setRejectQuantity] = useState(1);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectRemarks, setRejectRemarks] = useState("");
+  const [submittingReject, setSubmittingReject] = useState(false);
+
+  // Edit Rejection Log State (Admin)
+  const [rejectLogToEdit, setRejectLogToEdit] = useState(null);
+  const [openEditRejectModal, setOpenEditRejectModal] = useState(false);
+  const [editRejectQty, setEditRejectQty] = useState(1);
+  const [editRejectReason, setEditRejectReason] = useState("");
+  const [editRejectRemarks, setEditRejectRemarks] = useState("");
+  const [submittingEditRejectLog, setSubmittingEditRejectLog] = useState(false);
+
+  // Delete Rejection Log State (Admin)
+  const [rejectLogToDelete, setRejectLogToDelete] = useState(null);
+  const [openDeleteRejectDialog, setOpenDeleteRejectDialog] = useState(false);
+  const [submittingDeleteRejectLog, setSubmittingDeleteRejectLog] = useState(false);
 
   const canAdd = userRole === 'Admin' || userRole === 'Editor';
   const isAdmin = userRole === 'Admin';
@@ -235,7 +258,8 @@ export default function Refractory() {
           lines: data.lines || ['SG#1', 'SG#2', 'SG#3.1', 'SG#3.2'],
           refractoryTypes: data.refractoryTypes || ['Lip block', 'Moving block', 'Overflow block', 'Flat arc'],
           furnaceTypes: data.furnaceTypes || ['Cross fired', 'End fired'],
-          refractoryUnits: data.refractoryUnits || ['Set', 'Nos']
+          refractoryUnits: data.refractoryUnits || ['Set', 'Nos'],
+          rejectionReasons: data.rejectionReasons || ['Cracked / Broken', 'Quality Defect', 'Dimensional Issue', 'Damaged in Transit', 'Installation Failure', 'Other']
         });
       }
     });
@@ -272,6 +296,21 @@ export default function Refractory() {
       console.error("Error loading usage logs:", error);
     });
     return () => unsubscribeLogs();
+  }, []);
+
+  // 3.2 Fetch refractory rejection logs in real-time
+  useEffect(() => {
+    const q = query(collection(db, 'refractoryRejections'), orderBy('rejectedAt', 'desc'));
+    const unsubscribeRejections = onSnapshot(q, (snapshot) => {
+      const logData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setRejectionLogs(logData);
+    }, (error) => {
+      console.error("Error loading rejection logs:", error);
+    });
+    return () => unsubscribeRejections();
   }, []);
 
   // 3.5 Sort lines naturally (e.g. SG#1, SG#2, SG#3.1, SG#3.2)
@@ -434,6 +473,161 @@ export default function Refractory() {
       enqueueSnackbar("Error consumed stock: " + error.message, { variant: 'error' });
     } finally {
       setSubmittingUse(false);
+    }
+  };
+
+  // 8. Action: Handlers for Rejection
+  const handleOpenRejectForm = (stock) => {
+    setSelectedStockForReject(stock);
+    setRejectQuantity(1);
+    const defaultReasons = dropdowns.rejectionReasons || ['Cracked / Broken', 'Quality Defect', 'Dimensional Issue', 'Damaged in Transit', 'Installation Failure', 'Other'];
+    setRejectReason(defaultReasons[0] || 'Cracked / Broken');
+    setRejectRemarks("");
+    setOpenRejectForm(true);
+  };
+
+  const handleConfirmReject = async () => {
+    if (!selectedStockForReject) return;
+    if (rejectQuantity <= 0 || rejectQuantity > selectedStockForReject.units) {
+      enqueueSnackbar(`Please enter a quantity between 1 and ${selectedStockForReject.units}`, { variant: 'warning' });
+      return;
+    }
+    if (!rejectReason) {
+      enqueueSnackbar('Please select a rejection reason', { variant: 'warning' });
+      return;
+    }
+
+    setSubmittingReject(true);
+    try {
+      const stockRef = doc(db, 'refractories', selectedStockForReject.id);
+      const newUnits = selectedStockForReject.units - Number(rejectQuantity);
+      const currentRejected = Number(selectedStockForReject.rejectedUnits || 0);
+
+      // Decrement stock count and update cumulative rejected units
+      await updateDoc(stockRef, {
+        units: newUnits,
+        rejectedUnits: currentRejected + Number(rejectQuantity),
+        updatedAt: serverTimestamp()
+      });
+
+      const userDisplayName = currentUser?.displayName 
+        ? `${currentUser.displayName} (${currentUser.email})` 
+        : currentUser?.email || 'Unknown User';
+
+      // Write to Rejection Logs
+      await addDoc(collection(db, 'refractoryRejections'), {
+        refractoryId: selectedStockForReject.id,
+        type: selectedStockForReject.type,
+        line: selectedStockForReject.line || 'Unassigned',
+        furnaceType: selectedStockForReject.furnaceType || '',
+        unitsRejected: Number(rejectQuantity),
+        unit: selectedStockForReject.unit || 'Set',
+        reason: rejectReason,
+        supplierName: selectedStockForReject.supplierName || 'N/A',
+        rejectedBy: userDisplayName,
+        rejectedAt: serverTimestamp(),
+        remarks: rejectRemarks
+      });
+
+      enqueueSnackbar(`Recorded rejection of ${rejectQuantity} ${selectedStockForReject.unit || 'units'} of ${selectedStockForReject.type}`, { variant: 'error' });
+      setOpenRejectForm(false);
+      setSelectedStockForReject(null);
+    } catch (error) {
+      console.error("Error submitting rejection:", error);
+      enqueueSnackbar("Failed to record rejection: " + error.message, { variant: 'error' });
+    } finally {
+      setSubmittingReject(false);
+    }
+  };
+
+  const handleOpenEditRejectLog = (log) => {
+    setRejectLogToEdit(log);
+    setEditRejectQty(log.unitsRejected || 1);
+    setEditRejectReason(log.reason || (dropdowns.rejectionReasons?.[0] || 'Cracked / Broken'));
+    setEditRejectRemarks(log.remarks || "");
+    setOpenEditRejectModal(true);
+  };
+
+  const handleConfirmEditRejectLog = async () => {
+    if (!rejectLogToEdit) return;
+    if (editRejectQty <= 0) {
+      enqueueSnackbar('Quantity rejected must be greater than 0', { variant: 'warning' });
+      return;
+    }
+    setSubmittingEditRejectLog(true);
+    try {
+      const oldQty = Number(rejectLogToEdit.unitsRejected || 0);
+      const newQty = Number(editRejectQty);
+      const delta = oldQty - newQty; // positive if new Qty is less (restores stock), negative if new Qty is more
+
+      // Update rejection log entry
+      await updateDoc(doc(db, 'refractoryRejections', rejectLogToEdit.id), {
+        unitsRejected: newQty,
+        reason: editRejectReason,
+        remarks: editRejectRemarks,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUser?.email || 'Unknown'
+      });
+
+      // Adjust parent refractory batch if delta != 0
+      if (delta !== 0 && rejectLogToEdit.refractoryId) {
+        const stockRef = doc(db, 'refractories', rejectLogToEdit.refractoryId);
+        const targetStock = stocks.find(s => s.id === rejectLogToEdit.refractoryId);
+        if (targetStock) {
+          const updatedUnits = Math.max(0, targetStock.units + delta);
+          const updatedRejected = Math.max(0, (targetStock.rejectedUnits || 0) - delta);
+          await updateDoc(stockRef, {
+            units: updatedUnits,
+            rejectedUnits: updatedRejected,
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+
+      enqueueSnackbar('Rejection log updated successfully', { variant: 'success' });
+      setOpenEditRejectModal(false);
+      setRejectLogToEdit(null);
+    } catch (err) {
+      console.error("Error updating rejection log:", err);
+      enqueueSnackbar("Failed to update rejection log: " + err.message, { variant: 'error' });
+    } finally {
+      setSubmittingEditRejectLog(false);
+    }
+  };
+
+  const handleOpenDeleteRejectLog = (log) => {
+    setRejectLogToDelete(log);
+    setOpenDeleteRejectDialog(true);
+  };
+
+  const handleConfirmDeleteRejectLog = async () => {
+    if (!rejectLogToDelete) return;
+    setSubmittingDeleteRejectLog(true);
+    try {
+      await deleteDoc(doc(db, 'refractoryRejections', rejectLogToDelete.id));
+
+      // Restore units back to parent stock batch if exists
+      if (rejectLogToDelete.refractoryId) {
+        const targetStock = stocks.find(s => s.id === rejectLogToDelete.refractoryId);
+        if (targetStock) {
+          const restoredUnits = targetStock.units + Number(rejectLogToDelete.unitsRejected || 0);
+          const newRejectedCount = Math.max(0, (targetStock.rejectedUnits || 0) - Number(rejectLogToDelete.unitsRejected || 0));
+          await updateDoc(doc(db, 'refractories', rejectLogToDelete.refractoryId), {
+            units: restoredUnits,
+            rejectedUnits: newRejectedCount,
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+
+      enqueueSnackbar('Rejection log deleted and stock restored', { variant: 'success' });
+      setOpenDeleteRejectDialog(false);
+      setRejectLogToDelete(null);
+    } catch (err) {
+      console.error("Error deleting rejection log:", err);
+      enqueueSnackbar("Failed to delete log: " + err.message, { variant: 'error' });
+    } finally {
+      setSubmittingDeleteRejectLog(false);
     }
   };
 
@@ -923,16 +1117,28 @@ export default function Refractory() {
                     {/* Column 5: Actions (Use / Edit / Delete) */}
                     <Box sx={{ width: { xs: '100%', md: '25%' }, display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' }, alignItems: 'center', gap: 1 }}>
                       {canAdd && (
-                        <Button
-                          variant="contained"
-                          color="warning"
-                          size="small"
-                          startIcon={<RemoveCircleOutlineIcon />}
-                          onClick={() => handleOpenUseForm(stock)}
-                          sx={{ borderRadius: 2 }}
-                        >
-                          Use Stock
-                        </Button>
+                        <>
+                          <Button
+                            variant="contained"
+                            color="warning"
+                            size="small"
+                            startIcon={<RemoveCircleOutlineIcon />}
+                            onClick={() => handleOpenUseForm(stock)}
+                            sx={{ borderRadius: 2 }}
+                          >
+                            Use Stock
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            color="error"
+                            size="small"
+                            startIcon={<ReportProblemIcon />}
+                            onClick={() => handleOpenRejectForm(stock)}
+                            sx={{ borderRadius: 2, fontWeight: 'bold' }}
+                          >
+                            Reject Stock
+                          </Button>
+                        </>
                       )}
                       {isAdmin && (
                         <>
@@ -1154,6 +1360,89 @@ export default function Refractory() {
         </AccordionDetails>
       </Accordion>
 
+      {/* Section 4: Rejection History & Transaction Logs (Collapsible Accordion) */}
+      <Accordion sx={{ borderRadius: 3, border: '1px solid #e0e0e0', boxShadow: 'none', '&:before': { display: 'none' }, mt: 2 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ px: 3 }}>
+          <Typography variant="h6" fontWeight="bold" sx={{ display: 'flex', alignItems: 'center', gap: 1, color: 'error.main' }}>
+            <ReportProblemIcon color="error" /> Recent Stock Rejection Logs
+          </Typography>
+        </AccordionSummary>
+        <AccordionDetails sx={{ px: 3, pb: 3 }}>
+          {rejectionLogs.length > 0 ? (
+            <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
+              <Table size="small">
+                <TableHead sx={{ bgcolor: '#fff5f5' }}>
+                  <TableRow>
+                    <TableCell><strong>Date & Time</strong></TableCell>
+                    <TableCell><strong>Refractory Type</strong></TableCell>
+                    <TableCell><strong>Line</strong></TableCell>
+                    <TableCell align="right"><strong>Qty Rejected</strong></TableCell>
+                    <TableCell><strong>Rejection Reason</strong></TableCell>
+                    <TableCell><strong>Supplier Batch</strong></TableCell>
+                    <TableCell><strong>Recorded By</strong></TableCell>
+                    <TableCell><strong>Remarks / Details</strong></TableCell>
+                    {isAdmin && <TableCell align="center"><strong>Actions (Admin)</strong></TableCell>}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {rejectionLogs.map((log) => (
+                    <TableRow key={log.id} sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                      <TableCell>
+                        {log.rejectedAt?.seconds
+                          ? format(new Date(log.rejectedAt.seconds * 1000), 'dd/MM/yyyy HH:mm')
+                          : 'Just now'}
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                        {log.type}
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={log.line || 'Unassigned'} size="small" sx={{ borderRadius: 1 }} />
+                      </TableCell>
+                      <TableCell align="right" sx={{ fontWeight: 'bold', color: 'error.main' }}>
+                        -{log.unitsRejected} {log.unit || ''}
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={log.reason} color="error" size="small" variant="outlined" sx={{ fontWeight: 'bold' }} />
+                      </TableCell>
+                      <TableCell>{log.supplierName || '-'}</TableCell>
+                      <TableCell>
+                        <Box display="flex" alignItems="center" gap={0.5}>
+                          <AccountCircleIcon fontSize="inherit" color="action" />
+                          <Typography variant="body2">{log.rejectedBy?.split('@')[0] || log.rejectedBy}</Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                        {log.remarks || '-'}
+                      </TableCell>
+                      {isAdmin && (
+                        <TableCell align="center">
+                          <Stack direction="row" spacing={0.5} justifyContent="center">
+                            <Tooltip title="Edit Rejection Log (Admin)">
+                              <IconButton size="small" color="primary" onClick={() => handleOpenEditRejectLog(log)}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete Rejection Log (Admin)">
+                              <IconButton size="small" color="error" onClick={() => handleOpenDeleteRejectLog(log)}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Typography variant="body2" color="text.secondary" align="center" py={2}>
+              No stock rejections have been recorded yet.
+            </Typography>
+          )}
+        </AccordionDetails>
+      </Accordion>
+
       {/* Floating Action Button to Add New Refractory */}
       {canAdd && (
         <Fab
@@ -1362,6 +1651,212 @@ export default function Refractory() {
             variant="contained"
             color="error"
             disabled={submittingDeleteLog}
+          >
+            Delete & Restore Stock
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog for Recording Stock Rejection */}
+      <Dialog
+        open={openRejectForm}
+        onClose={() => setOpenRejectForm(false)}
+        PaperProps={{
+          sx: { borderRadius: 3 }
+        }}
+      >
+        <DialogTitle sx={{ bgcolor: 'error.main', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Box display="flex" alignItems="center" gap={1}>
+            <ReportProblemIcon />
+            <span>Record Refractory Rejection</span>
+          </Box>
+          <IconButton onClick={() => setOpenRejectForm(false)} sx={{ color: 'white' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ pt: 3 }}>
+          {selectedStockForReject && (
+            <Stack spacing={3} sx={{ mt: 1 }}>
+              <Alert severity="error" icon={<ReportProblemIcon />}>
+                Recording rejection for <strong>{selectedStockForReject.type}</strong> ({selectedStockForReject.line || 'Unassigned'}) from <strong>{selectedStockForReject.supplierName || 'N/A'}</strong> batch. The rejected quantity will be deducted from available stock.
+              </Alert>
+
+              <Box display="flex" justifyContent="space-between" p={1.5} bgcolor="#fff5f5" borderRadius={2} border="1px solid #ffe3e3">
+                <Box>
+                  <Typography variant="caption" color="text.secondary" display="block">Recorded By:</Typography>
+                  <Typography variant="body2" fontWeight="bold" color="error.dark">
+                    {currentUser?.displayName ? `${currentUser.displayName} (${currentUser.email})` : currentUser?.email || 'Unknown User'}
+                  </Typography>
+                </Box>
+                <Box textAlign="right">
+                  <Typography variant="caption" color="text.secondary" display="block">Available Stock:</Typography>
+                  <Typography variant="body2" fontWeight="bold" color="text.primary">
+                    {selectedStockForReject.units} {selectedStockForReject.unit || 'units'}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <TextField
+                type="number"
+                label="Quantity Rejected *"
+                fullWidth
+                value={rejectQuantity}
+                onChange={(e) => setRejectQuantity(Math.min(selectedStockForReject.units, Math.max(1, Number(e.target.value))))}
+                helperText={`Maximum available to reject: ${selectedStockForReject.units} ${selectedStockForReject.unit || 'units'}`}
+                InputProps={{
+                  inputProps: { min: 1, max: selectedStockForReject.units },
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <NumbersIcon color="error" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+
+              <TextField
+                select
+                label="Rejection Reason *"
+                fullWidth
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+              >
+                {(dropdowns.rejectionReasons || ['Cracked / Broken', 'Quality Defect', 'Dimensional Issue', 'Damaged in Transit', 'Installation Failure', 'Other']).map((reason) => (
+                  <MenuItem key={reason} value={reason}>
+                    {reason}
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              <TextField
+                label="Remarks / Rejection Details"
+                fullWidth
+                multiline
+                rows={2.5}
+                placeholder="Describe the issue, defect details, or condition..."
+                value={rejectRemarks}
+                onChange={(e) => setRejectRemarks(e.target.value)}
+              />
+            </Stack>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2.5, bgcolor: '#fcfcfc', borderBottomLeftRadius: 12, borderBottomRightRadius: 12 }}>
+          <Button onClick={() => setOpenRejectForm(false)} variant="outlined" color="inherit">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmReject}
+            variant="contained"
+            color="error"
+            disabled={submittingReject}
+            sx={{ borderRadius: 2, fontWeight: 'bold' }}
+          >
+            Confirm Rejection & Deduct Stock
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog for Admin Edit Rejection Log */}
+      <Dialog
+        open={openEditRejectModal}
+        onClose={() => setOpenEditRejectModal(false)}
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ bgcolor: 'error.main', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          Edit Stock Rejection Log (Admin)
+          <IconButton onClick={() => setOpenEditRejectModal(false)} sx={{ color: 'white' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          {rejectLogToEdit && (
+            <Stack spacing={3} sx={{ mt: 1 }}>
+              <Alert severity="info">
+                Editing rejection log for <strong>{rejectLogToEdit.type}</strong> on <strong>{rejectLogToEdit.line}</strong> ({rejectLogToEdit.supplierName}).
+              </Alert>
+
+              <TextField
+                type="number"
+                label="Quantity Rejected (Units)"
+                fullWidth
+                value={editRejectQty}
+                onChange={(e) => setEditRejectQty(Math.max(1, Number(e.target.value)))}
+                InputProps={{
+                  inputProps: { min: 1 },
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <NumbersIcon color="error" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+
+              <TextField
+                select
+                label="Rejection Reason"
+                fullWidth
+                value={editRejectReason}
+                onChange={(e) => setEditRejectReason(e.target.value)}
+              >
+                {(dropdowns.rejectionReasons || ['Cracked / Broken', 'Quality Defect', 'Dimensional Issue', 'Damaged in Transit', 'Installation Failure', 'Other']).map((reason) => (
+                  <MenuItem key={reason} value={reason}>
+                    {reason}
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              <TextField
+                label="Remarks / Details"
+                fullWidth
+                multiline
+                rows={2}
+                value={editRejectRemarks}
+                onChange={(e) => setEditRejectRemarks(e.target.value)}
+              />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2.5, bgcolor: '#f9f9f9' }}>
+          <Button onClick={() => setOpenEditRejectModal(false)} variant="outlined" color="inherit">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmEditRejectLog}
+            variant="contained"
+            color="error"
+            disabled={submittingEditRejectLog}
+          >
+            Update Rejection Log
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog for Admin Delete Rejection Log Confirmation */}
+      <Dialog
+        open={openDeleteRejectDialog}
+        onClose={() => setOpenDeleteRejectDialog(false)}
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ bgcolor: 'error.main', color: 'white' }}>
+          Confirm Delete Rejection Log (Admin)
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3 }}>
+          {rejectLogToDelete && (
+            <Typography variant="body1">
+              Are you sure you want to delete this rejection log entry of <strong>{rejectLogToDelete.unitsRejected} units</strong> for <strong>{rejectLogToDelete.type}</strong>? Deleting this log will restore <strong>{rejectLogToDelete.unitsRejected} units</strong> back to available stock.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2.5 }}>
+          <Button onClick={() => setOpenDeleteRejectDialog(false)} variant="outlined" color="inherit">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmDeleteRejectLog}
+            variant="contained"
+            color="error"
+            disabled={submittingDeleteRejectLog}
           >
             Delete & Restore Stock
           </Button>

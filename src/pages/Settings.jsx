@@ -77,7 +77,8 @@ export default function Settings() {
     designPatterns: [],
     refractoryTypes: [],
     furnaceTypes: [],
-    refractoryUnits: []
+    refractoryUnits: [],
+    rejectionReasons: []
   });
   const [newOption, setNewOption] = useState('');
   const [selectedDropdown, setSelectedDropdown] = useState('activityTypes');
@@ -148,11 +149,16 @@ export default function Settings() {
           data.refractoryUnits = ['Set', 'Nos'];
           needsUpdate = true;
         }
+        if (!data.rejectionReasons) {
+          data.rejectionReasons = ['Cracked / Broken', 'Quality Defect', 'Dimensional Issue', 'Damaged in Transit', 'Installation Failure', 'Other'];
+          needsUpdate = true;
+        }
         if (needsUpdate) {
           await updateDoc(docRef, {
             refractoryTypes: data.refractoryTypes,
             furnaceTypes: data.furnaceTypes,
-            refractoryUnits: data.refractoryUnits
+            refractoryUnits: data.refractoryUnits,
+            rejectionReasons: data.rejectionReasons
           });
         }
         setDropdowns(data);
@@ -163,7 +169,8 @@ export default function Settings() {
           designPatterns: ['Pattern A', 'Pattern B'],
           refractoryTypes: ['Lip block', 'Moving block', 'Overflow block', 'Flat arc'],
           furnaceTypes: ['Cross fired', 'End fired'],
-          refractoryUnits: ['Set', 'Nos']
+          refractoryUnits: ['Set', 'Nos'],
+          rejectionReasons: ['Cracked / Broken', 'Quality Defect', 'Dimensional Issue', 'Damaged in Transit', 'Installation Failure', 'Other']
         };
         await setDoc(docRef, initialData);
         setDropdowns(initialData);
@@ -334,7 +341,8 @@ export default function Settings() {
     designPatterns: 'Design Patterns',
     refractoryTypes: 'Refractory Types',
     furnaceTypes: 'Furnace Types',
-    refractoryUnits: 'Refractory Units'
+    refractoryUnits: 'Refractory Units',
+    rejectionReasons: 'Rejection Reasons'
   };
 
   // Alert Config State
@@ -473,6 +481,7 @@ export default function Settings() {
                   <MenuItem value="refractoryTypes">Refractory Types</MenuItem>
                   <MenuItem value="furnaceTypes">Furnace Types</MenuItem>
                   <MenuItem value="refractoryUnits">Refractory Units</MenuItem>
+                  <MenuItem value="rejectionReasons">Rejection Reasons</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
