@@ -68,7 +68,7 @@ async function runAlertCheck() {
     }
 
     // Initialize EmailJS
-    emailjs.init(emailJsConfig.publicKey);
+    emailjs.init({ publicKey: emailJsConfig.publicKey, privateKey: emailJsConfig.privateKey });
 
     // Run alert check
     return await checkAndTriggerAlerts(alertConfig, emailJsConfig);
@@ -132,13 +132,13 @@ async function checkAndTriggerAlerts(config, emailJsConfig) {
                     const allKeys = Object.keys(latestRecord);
                     const readyToUseKey = allKeys.find(key => key.toLowerCase().startsWith('ready_to_use'));
                     const readyValue = readyToUseKey ? latestRecord[readyToUseKey] : undefined;
-                    calculatedStatus = readyValue === 'Yes' ? 'Ready to Use' : 'Sent to Vendor';
+                    calculatedStatus = readyValue === 'Yes' ? 'Ready to Use' : 'To be sent';
                 } else if (latestRecord.activity === 'Production Start') {
                     calculatedStatus = 'Running';
                 } else if (latestRecord.activity === 'Production End') {
-                    calculatedStatus = 'To be sent'; // Maps to Production End in logic
+                    calculatedStatus = 'To be sent'; // Maps to 'To be sent'
                 } else if (latestRecord.activity === 'Roller sent') {
-                    calculatedStatus = 'Roller sent'; // Maps to Sent to Vendor in logic
+                    calculatedStatus = 'Sent to Vendor'; // Maps to 'Sent to Vendor'
                 }
 
                 // --- Feature: Ready to Use Counter ---
@@ -174,43 +174,43 @@ async function checkAndTriggerAlerts(config, emailJsConfig) {
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
                 // --- Delay Alerts Logic ---
-                // Note: Logic relies on roller.currentStatus being up to date. 
-                // However, for robustness, we could use calculatedStatus above, 
-                // but keeping original logic references to roller.currentStatus to minimize risk 
-                // unless it is known to be out of sync. Assuming roller.currentStatus is synced.
+                // Support both database currentStatus ('To be sent' / 'Sent to Vendor') and legacy names
+                const currentOrCalcStatus = roller.currentStatus || calculatedStatus;
 
-                // Check Delay in Send (Status: Production End / To be sent)
+                // Check Delay in Send (Status: 'To be sent' / 'Production End')
+                const isDelayInSend = (currentOrCalcStatus === 'To be sent' || currentOrCalcStatus === 'Production End');
                 if (
                     config.productionEndDelay?.enabled &&
-                    roller.currentStatus === 'Production End' &&
+                    isDelayInSend &&
                     diffDays > config.productionEndDelay.days
                 ) {
-                    const shouldSend = await checkLastAlertDate(roller.id, roller.currentStatus);
+                    const shouldSend = await checkLastAlertDate(roller.id, 'To be sent');
                     if (shouldSend) {
                         delayedSendRollers.push({ ...roller, diffDays, recordDate });
                     }
                 }
 
-                        // Check Delay in Receive (Status: Roller sent)
-                        if (
-                            config.rollerSentDelay?.enabled &&
-                            roller.currentStatus === 'Roller sent' &&
-                            diffDays > config.rollerSentDelay.days
-                        ) {
-                            const shouldSend = await checkLastAlertDate(roller.id, roller.currentStatus);
-                            if (shouldSend) {
-                                // Extract Vendor Name from latest record
-                                const allKeys = Object.keys(latestRecord);
-                                const vendorKey = allKeys.find(key => 
-                                    key.toLowerCase().includes('vendor') || 
-                                    key.toLowerCase().includes('supplier') ||
-                                    key.toLowerCase().includes('party')
-                                );
-                                const vendorName = vendorKey && latestRecord[vendorKey] ? String(latestRecord[vendorKey]).trim() : '-';
-                                
-                                delayedReceiveRollers.push({ ...roller, diffDays, recordDate, vendorName });
-                            }
-                        }
+                // Check Delay in Receive (Status: 'Sent to Vendor' / 'Roller sent')
+                const isDelayInReceive = (currentOrCalcStatus === 'Sent to Vendor' || currentOrCalcStatus === 'Roller sent');
+                if (
+                    config.rollerSentDelay?.enabled &&
+                    isDelayInReceive &&
+                    diffDays > config.rollerSentDelay.days
+                ) {
+                    const shouldSend = await checkLastAlertDate(roller.id, 'Sent to Vendor');
+                    if (shouldSend) {
+                        // Extract Vendor Name from latest record
+                        const allKeys = Object.keys(latestRecord);
+                        const vendorKey = allKeys.find(key => 
+                            key.toLowerCase().includes('vendor') || 
+                            key.toLowerCase().includes('supplier') ||
+                            key.toLowerCase().includes('party')
+                        );
+                        const vendorName = vendorKey && latestRecord[vendorKey] ? String(latestRecord[vendorKey]).trim() : '-';
+                        
+                        delayedReceiveRollers.push({ ...roller, diffDays, recordDate, vendorName });
+                    }
+                }
             } catch (error) {
                 console.error(`Error processing roller ${roller.id}:`, error);
                 continue;
@@ -220,12 +220,12 @@ async function checkAndTriggerAlerts(config, emailJsConfig) {
         // --- Execute Delay Batch Emails ---
         if (delayedSendRollers.length > 0) {
             await sendBulkAlertEmail(delayedSendRollers, "Delayed in send roller to vendor", emailJsConfig);
-            for (const roller of delayedSendRollers) await updateLastAlertDate(roller.id, roller.currentStatus);
+            for (const roller of delayedSendRollers) await updateLastAlertDate(roller.id, 'To be sent');
         }
 
         if (delayedReceiveRollers.length > 0) {
             await sendBulkAlertEmail(delayedReceiveRollers, "Delayed in receive roller from vendor", emailJsConfig);
-            for (const roller of delayedReceiveRollers) await updateLastAlertDate(roller.id, roller.currentStatus);
+            for (const roller of delayedReceiveRollers) await updateLastAlertDate(roller.id, 'Sent to Vendor');
         }
 
         // --- Execute Ready to Use Low Stock Alert ---
@@ -298,7 +298,7 @@ async function sendBulkAlertEmail(rollers, alertType, emailJsConfig) {
     const toEmails = emailJsConfig.toEmails ? emailJsConfig.toEmails.split(',').map(e => e.trim()).filter(e => e) : ['hiren.dodiya@borosil.com'];
     const ccEmails = emailJsConfig.ccEmails ? emailJsConfig.ccEmails.split(',').map(e => e.trim()).filter(e => e) : [];
 
-    const allRecipients = [...toEmails, ...ccEmails].join('; ');
+    const allRecipients = [...toEmails, ...ccEmails].join(', ');
 
     const templateParams = {
         title: `${alertType} - ${rollers.length} Pending Rollers`, // Summary title
@@ -388,7 +388,7 @@ async function sendReadyToUseAlert(counts, minQty, emailJsConfig) {
     const toEmails = emailJsConfig.toEmails ? emailJsConfig.toEmails.split(',').map(e => e.trim()).filter(e => e) : ['hiren.dodiya@borosil.com'];
     const ccEmails = emailJsConfig.ccEmails ? emailJsConfig.ccEmails.split(',').map(e => e.trim()).filter(e => e) : [];
 
-    const allRecipients = [...toEmails, ...ccEmails].join('; ');
+    const allRecipients = [...toEmails, ...ccEmails].join(', ');
 
     const templateParams = {
         title: `CRITICAL: Low Ready to Use Stock - Below ${minQty}`,

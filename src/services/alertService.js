@@ -17,6 +17,28 @@ export const fetchAlertConfig = async () => {
     }
 };
 
+// Helper function to parse dates reliably
+const parseRecordDate = (dateVal) => {
+    if (!dateVal) return null;
+    if (typeof dateVal === 'string') {
+        if (dateVal.includes('/')) {
+            const parts = dateVal.split('/');
+            if (parts.length === 3) {
+                return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+            }
+        }
+        const parsed = new Date(dateVal);
+        return isNaN(parsed.getTime()) ? null : parsed;
+    }
+    if (dateVal.toDate && typeof dateVal.toDate === 'function') {
+        return dateVal.toDate();
+    }
+    if (dateVal instanceof Date) {
+        return dateVal;
+    }
+    return null;
+};
+
 // Main function to check rollers and trigger alerts
 export const checkAndTriggerAlerts = async (config, emailJsConfig) => {
     if (!config) return { checked: 0, alertsSent: 0 };
@@ -26,6 +48,17 @@ export const checkAndTriggerAlerts = async (config, emailJsConfig) => {
 
     let alertsSent = 0;
     let checked = 0;
+
+    // Arrays to hold delayed rollers for batching into one single email
+    const delayedSendRollers = [];
+    const delayedReceiveRollers = [];
+
+    // Inventory counters for Ready to Use Low Stock Alert
+    const readyToUseCounts = {
+        'SG#1': { Top: 0, Bottom: 0 },
+        'SG#2': { Top: 0, Bottom: 0 },
+        'SG#3': { Top: 0, Bottom: 0 }
+    };
 
     try {
         const rollersSnapshot = await getDocs(collection(db, 'rollers'));
@@ -45,73 +78,94 @@ export const checkAndTriggerAlerts = async (config, emailJsConfig) => {
 
                 const approvedRecords = recordsSnapshot.docs
                     .map(doc => ({ id: doc.id, ...doc.data() }))
-                    .filter(record => record.status === 'Approved' && record.activity === roller.currentStatus)
+                    .filter(record => record.status === 'Approved' && record.activity !== 'Roller PDI')
                     .sort((a, b) => {
-                        let dateA, dateB;
-
-                        if (a.date && typeof a.date === 'string') {
-                            const parts = a.date.split('/');
-                            dateA = new Date(parts[2], parts[1] - 1, parts[0]);
-                        } else if (a.date && a.date.toDate) {
-                            dateA = a.date.toDate();
-                        } else {
-                            dateA = new Date(0);
-                        }
-
-                        if (b.date && typeof b.date === 'string') {
-                            const parts = b.date.split('/');
-                            dateB = new Date(parts[2], parts[1] - 1, parts[0]);
-                        } else if (b.date && b.date.toDate) {
-                            dateB = b.date.toDate();
-                        } else {
-                            dateB = new Date(0);
-                        }
-
+                        const dateA = parseRecordDate(a.date) || new Date(0);
+                        const dateB = parseRecordDate(b.date) || new Date(0);
                         return dateB - dateA;
                     });
 
                 if (approvedRecords.length === 0) continue;
 
                 const latestRecord = approvedRecords[0];
-                if (!latestRecord.date) continue;
 
-                let recordDate;
-                if (typeof latestRecord.date === 'string') {
-                    const dateParts = latestRecord.date.split('/');
-                    recordDate = new Date(dateParts[2], dateParts[1] - 1, dateParts[0]);
-                } else if (latestRecord.date.toDate) {
-                    recordDate = latestRecord.date.toDate();
-                } else {
-                    continue;
-                }
-
-                const now = new Date();
-                const diffTime = Math.abs(now - recordDate);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-                if (
-                    config.productionEndDelay?.enabled &&
-                    roller.currentStatus === 'Production End' &&
-                    diffDays > config.productionEndDelay.days
-                ) {
-                    const shouldSend = await checkLastAlertDate(roller.id, roller.currentStatus);
-                    if (shouldSend) {
-                        await sendAlertEmail(roller, "Delayed in send roller to vendor", diffDays, emailJsConfig, recordDate);
-                        await updateLastAlertDate(roller.id, roller.currentStatus);
-                        alertsSent++;
+                // Calculate current status fallback if roller.currentStatus is missing or out of sync
+                let status = roller.currentStatus;
+                if (!status || status === 'No Activity') {
+                    if (latestRecord.activity === 'Roller Received') {
+                        const allKeys = Object.keys(latestRecord);
+                        const readyToUseKey = allKeys.find(key => key.toLowerCase().includes('ready_to_use'));
+                        const readyValue = readyToUseKey ? latestRecord[readyToUseKey] : undefined;
+                        status = readyValue === 'Yes' ? 'Ready to Use' : 'To be sent';
+                    } else if (latestRecord.activity === 'Production Start') {
+                        status = 'Running';
+                    } else if (latestRecord.activity === 'Production End') {
+                        status = 'To be sent';
+                    } else if (latestRecord.activity === 'Roller sent') {
+                        status = 'Sent to Vendor';
+                    } else if (latestRecord.activity === 'Scrap') {
+                        status = 'Scrap';
                     }
                 }
 
-                if (
-                    config.rollerSentDelay?.enabled &&
-                    roller.currentStatus === 'Roller sent' &&
-                    diffDays > config.rollerSentDelay.days
-                ) {
-                    const shouldSend = await checkLastAlertDate(roller.id, roller.currentStatus);
-                    if (shouldSend) {
-                        await sendAlertEmail(roller, "Delayed in receive roller from vendor", diffDays, emailJsConfig, recordDate);
-                        await updateLastAlertDate(roller.id, roller.currentStatus);
-                        alertsSent++;
+                // Count Ready to Use stock
+                if (status === 'Ready to Use') {
+                    let lineKey = roller.line;
+                    if (lineKey === 'SG#3.1' || lineKey === 'SG#3.2') {
+                        lineKey = 'SG#3';
+                    }
+                    const positionKey = roller.position;
+                    if (readyToUseCounts[lineKey] && (positionKey === 'Top' || positionKey === 'Bottom')) {
+                        readyToUseCounts[lineKey][positionKey]++;
+                    }
+                }
+
+                const now = new Date();
+
+                // Alert 1: Delay in sending roller to vendor (Status: 'To be sent' / 'Production End')
+                const isDelayInSendStatus = status === 'To be sent' || status === 'Production End';
+                if (config.productionEndDelay?.enabled && isDelayInSendStatus) {
+                    const prodEndRecord = approvedRecords.find(r => r.activity === 'Production End') || latestRecord;
+                    const recordDate = parseRecordDate(prodEndRecord?.date);
+
+                    if (recordDate) {
+                        const diffTime = Math.abs(now - recordDate);
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                        if (diffDays > config.productionEndDelay.days) {
+                            const shouldSend = await checkLastAlertDate(roller.id, 'To be sent');
+                            if (shouldSend) {
+                                delayedSendRollers.push({ ...roller, diffDays, recordDate });
+                            }
+                        }
+                    }
+                }
+
+                // Alert 2: Delay in receiving roller from vendor (Status: 'Sent to Vendor' / 'Roller sent')
+                const isDelayInReceiveStatus = status === 'Sent to Vendor' || status === 'Roller sent';
+                if (config.rollerSentDelay?.enabled && isDelayInReceiveStatus) {
+                    const sentRecord = approvedRecords.find(r => r.activity === 'Roller sent') || latestRecord;
+                    const recordDate = parseRecordDate(sentRecord?.date);
+
+                    if (recordDate) {
+                        const diffTime = Math.abs(now - recordDate);
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                        if (diffDays > config.rollerSentDelay.days) {
+                            const shouldSend = await checkLastAlertDate(roller.id, 'Sent to Vendor');
+                            if (shouldSend) {
+                                // Extract Vendor Name from latest record
+                                const allKeys = Object.keys(sentRecord || latestRecord);
+                                const vendorKey = allKeys.find(key => 
+                                    key.toLowerCase().includes('vendor') || 
+                                    key.toLowerCase().includes('supplier') ||
+                                    key.toLowerCase().includes('party')
+                                );
+                                const vendorName = vendorKey && (sentRecord || latestRecord)[vendorKey] ? String((sentRecord || latestRecord)[vendorKey]).trim() : '-';
+                                
+                                delayedReceiveRollers.push({ ...roller, diffDays, recordDate, vendorName });
+                            }
+                        }
                     }
                 }
             } catch (error) {
@@ -119,12 +173,57 @@ export const checkAndTriggerAlerts = async (config, emailJsConfig) => {
                 continue;
             }
         }
+
+        // --- Execute Batch Email for Delay in Sending ---
+        if (delayedSendRollers.length > 0) {
+            const success = await sendBulkAlertEmail(delayedSendRollers, "Delayed in send roller to vendor", emailJsConfig);
+            if (success) {
+                for (const roller of delayedSendRollers) {
+                    await updateLastAlertDate(roller.id, 'To be sent');
+                }
+                alertsSent++;
+            }
+        }
+
+        // --- Execute Batch Email for Delay in Receiving from Vendor ---
+        if (delayedReceiveRollers.length > 0) {
+            const success = await sendBulkAlertEmail(delayedReceiveRollers, "Delayed in receive roller from vendor", emailJsConfig);
+            if (success) {
+                for (const roller of delayedReceiveRollers) {
+                    await updateLastAlertDate(roller.id, 'Sent to Vendor');
+                }
+                alertsSent++;
+            }
+        }
+
+        // --- Execute Ready to Use Low Stock Alert ---
+        if (config.readyToUseAlert?.enabled) {
+            const minQty = config.readyToUseAlert.minimum || 0;
+            let lowStockDetected = false;
+            Object.values(readyToUseCounts).forEach(lineCounts => {
+                if (lineCounts.Top < minQty || lineCounts.Bottom < minQty) {
+                    lowStockDetected = true;
+                }
+            });
+
+            if (lowStockDetected) {
+                const success = await sendReadyToUseAlert(readyToUseCounts, minQty, emailJsConfig);
+                if (success) {
+                    alertsSent++;
+                }
+            }
+        }
     } catch (error) {
         console.error("Error in checkAndTriggerAlerts:", error);
         throw error;
     }
 
-    return { checked, alertsSent };
+    return { 
+        checked, 
+        alertsSent,
+        sendDelayCount: delayedSendRollers.length,
+        receiveDelayCount: delayedReceiveRollers.length 
+    };
 };
 
 const checkLastAlertDate = async (rollerId, status) => {
@@ -161,18 +260,18 @@ const updateLastAlertDate = async (rollerId, status) => {
     }
 };
 
-// Send one email with multiple recipients (semicolon-separated)
-const sendAlertEmail = async (roller, alertType, days, emailJsConfig, recordDate) => {
-    const htmlContent = generateEmailHtml(roller, alertType, days, recordDate);
+// Send ONE single bulk email with a summary table of all delayed rollers
+const sendBulkAlertEmail = async (rollers, alertType, emailJsConfig) => {
+    const htmlContent = generateBulkEmailHtml(rollers, alertType);
 
     const toEmails = emailJsConfig.toEmails ? emailJsConfig.toEmails.split(',').map(e => e.trim()).filter(e => e) : ['hiren.dodiya@borosil.com'];
     const ccEmails = emailJsConfig.ccEmails ? emailJsConfig.ccEmails.split(',').map(e => e.trim()).filter(e => e) : [];
 
-    // Combine with semicolon separator for EmailJS
-    const allRecipients = [...toEmails, ...ccEmails].join('; ');
+    // Combine with comma separator for EmailJS
+    const allRecipients = [...toEmails, ...ccEmails].join(', ');
 
     const templateParams = {
-        title: `${alertType} - Roller ${roller.rollerNumber || roller.id}`,
+        title: `${alertType} - ${rollers.length} Pending Rollers`,
         message: htmlContent,
         name: 'Roller Alert System',
         email: 'hiren.dodiya@borosil.com',
@@ -185,61 +284,142 @@ const sendAlertEmail = async (roller, alertType, days, emailJsConfig, recordDate
             emailJsConfig.templateId,
             templateParams
         );
-        console.log(`✅ Email sent for ${roller.id} to: ${allRecipients}`);
+        console.log(`✅ Bulk email sent for ${alertType} (${rollers.length} rollers) to: ${allRecipients}`);
+        return true;
     } catch (error) {
-        console.error("❌ Error sending email:", error);
+        console.error(`❌ Error sending bulk email for ${alertType}:`, error);
+        return false;
     }
 };
 
-const generateEmailHtml = (roller, alertType, days, recordDate) => {
-    const date = recordDate ? recordDate.toLocaleDateString() : 'N/A';
+const generateBulkEmailHtml = (rollers, alertType) => {
     const color = '#d32f2f';
+    const isReceiveDelay = alertType === "Delayed in receive roller from vendor";
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+
+    const rowRows = rollers.map(roller => {
+        const date = roller.recordDate ? roller.recordDate.toLocaleDateString() : 'N/A';
+        const link = origin ? `<a href="${origin}/roller/${roller.id}" style="color: #1976d2; text-decoration: none; font-weight: bold;">${roller.rollerNumber || roller.id}</a>` : (roller.rollerNumber || 'N/A');
+        return `
+        <tr style="border-bottom: 1px solid #eee;">
+            <td style="padding: 10px; border: 1px solid #ddd;">${link}</td>
+            <td style="padding: 10px; border: 1px solid #ddd; color: ${color}; font-weight: bold;">${roller.diffDays} Days</td>
+            <td style="padding: 10px; border: 1px solid #ddd;">${roller.currentStatus || 'To be sent'}</td>
+            <td style="padding: 10px; border: 1px solid #ddd;">${roller.line || 'N/A'}</td>
+            <td style="padding: 10px; border: 1px solid #ddd;">${roller.position || 'N/A'}</td>
+            <td style="padding: 10px; border: 1px solid #ddd;">${date}</td>
+            ${isReceiveDelay ? `<td style="padding: 10px; border: 1px solid #ddd;">${roller.vendorName || '-'}</td>` : ''}
+        </tr>
+        `;
+    }).join('');
 
     return `
-    <div style="font-family: 'Roboto', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f5f5f5; padding: 20px; border-radius: 8px;">
+    <div style="font-family: 'Roboto', Arial, sans-serif; max-width: 800px; margin: 0 auto; background-color: #f5f5f5; padding: 20px; border-radius: 8px;">
       <div style="background-color: ${color}; color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
-        <h1 style="margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 1px;">Delay alert for roller</h1>
+        <h1 style="margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 1px;">Roller Delay Report</h1>
         <p style="margin: 5px 0 0; opacity: 0.9;">${alertType}</p>
       </div>
       
-      <div style="background-color: white; padding: 30px; border-radius: 0 0 8px 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-        <div style="text-align: center; margin-bottom: 25px;">
-          <p style="color: #666; font-size: 14px; margin-bottom: 5px;">Roller Number</p>
-          <h2 style="color: #333; font-size: 32px; margin: 0; font-weight: 700;">${roller.rollerNumber || 'N/A'}</h2>
-          <div style="display: inline-block; background-color: #ffebee; color: ${color}; padding: 5px 15px; border-radius: 15px; font-size: 12px; font-weight: bold; margin-top: 10px;">
-            Overdue by ${days} days
-          </div>
-        </div>
+      <div style="background-color: white; padding: 20px; border-radius: 0 0 8px 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+        <p style="color: #666; margin-bottom: 20px;">
+            The following <strong>${rollers.length}</strong> rollers are overdue for the activity: <strong>${alertType}</strong>.
+        </p>
 
-        <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px;">
-          <tr style="border-bottom: 1px solid #eee;">
-            <td style="padding: 12px 0; color: #666;">Current Status</td>
-            <td style="padding: 12px 0; text-align: right; font-weight: 600; color: #333;">${roller.currentStatus}</td>
-          </tr>
-          <tr style="border-bottom: 1px solid #eee;">
-            <td style="padding: 12px 0; color: #666;">Production Line</td>
-            <td style="padding: 12px 0; text-align: right; font-weight: 600; color: #333;">${roller.line || 'N/A'}</td>
-          </tr>
-          <tr style="border-bottom: 1px solid #eee;">
-            <td style="padding: 12px 0; color: #666;">Position</td>
-            <td style="padding: 12px 0; text-align: right; font-weight: 600; color: #333;">${roller.position || 'N/A'}</td>
-          </tr>
-          <tr style="border-bottom: 1px solid #eee;">
-            <td style="padding: 12px 0; color: #666;">Record Date</td>
-            <td style="padding: 12px 0; text-align: right; font-weight: 600; color: #333;">${date}</td>
-          </tr>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 14px;">
+          <thead>
+            <tr style="background-color: #f9f9f9;">
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Roller No.</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Overdue</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Status</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Line</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Position</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Date</th>
+              ${isReceiveDelay ? '<th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Vendor</th>' : ''}
+            </tr>
+          </thead>
+          <tbody>
+            ${rowRows}
+          </tbody>
         </table>
-
-        <div style="text-align: center;">
-          <a href="${window.location.origin}/roller/${roller.id}" style="background-color: ${color}; color: white; text-decoration: none; padding: 12px 30px; border-radius: 4px; font-weight: bold; display: inline-block; box-shadow: 0 2px 4px rgba(211, 47, 47, 0.3);">
-            VIEW ROLLER DETAILS
-          </a>
-        </div>
       </div>
       
       <div style="text-align: center; margin-top: 20px; color: #999; font-size: 12px;">
-        <p>Roller Management System • Automated Alert</p>
+        <p>Roller Management System • Automated Batch Alert</p>
       </div>
     </div>
   `;
+};
+
+const sendReadyToUseAlert = async (counts, minQty, emailJsConfig) => {
+    const color = '#d32f2f';
+    const greenColor = '#388E3C';
+
+    const renderCell = (qty) => {
+        const isLow = qty < minQty;
+        const cellColor = isLow ? color : greenColor;
+        const bgColor = isLow ? '#ffebee' : '#e8f5e9';
+        const fontWeight = isLow ? 'bold' : 'normal';
+        return `<td style="padding: 12px; border: 1px solid #ddd; text-align: center; color: ${cellColor}; background-color: ${bgColor}; font-weight: ${fontWeight};">${qty}</td>`;
+    };
+
+    const tableRows = Object.keys(counts).map(line => {
+        return `<tr>
+            <td style="padding: 12px; border: 1px solid #ddd; font-weight: bold;">${line}</td>
+            ${renderCell(counts[line].Top)}
+            ${renderCell(counts[line].Bottom)}
+        </tr>`;
+    }).join('');
+
+    const htmlContent = `
+    <div style="font-family: 'Roboto', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f5f5f5; padding: 20px; border-radius: 8px;">
+      <div style="background-color: ${color}; color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
+        <h1 style="margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 1px;">Low Stock Alert</h1>
+        <p style="margin: 5px 0 0; opacity: 0.9;">Ready to Use Rollers</p>
+      </div>
+      <div style="background-color: white; padding: 20px; border-radius: 0 0 8px 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+        <p style="color: #666; margin-bottom: 20px; text-align: center;">
+            The inventory for "Ready to Use" rollers has fallen below the minimum threshold of <strong>${minQty}</strong> for one or more lines.
+        </p>
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 14px;">
+          <thead>
+            <tr style="background-color: #f9f9f9;">
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: left;">Line</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Top</th>
+              <th style="padding: 10px; border: 1px solid #ddd; text-align: center;">Bottom</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+          </tbody>
+        </table>
+      </div>
+      <div style="text-align: center; margin-top: 20px; color: #999; font-size: 12px;">
+        <p>Roller Management System • Automated Inventory Alert</p>
+      </div>
+    </div>`;
+
+    const toEmails = emailJsConfig.toEmails ? emailJsConfig.toEmails.split(',').map(e => e.trim()).filter(e => e) : ['hiren.dodiya@borosil.com'];
+    const ccEmails = emailJsConfig.ccEmails ? emailJsConfig.ccEmails.split(',').map(e => e.trim()).filter(e => e) : [];
+    const allRecipients = [...toEmails, ...ccEmails].join(', ');
+
+    const templateParams = {
+        title: `CRITICAL: Low Ready to Use Stock - Below ${minQty}`,
+        message: htmlContent,
+        name: 'Roller Alert System',
+        email: 'hiren.dodiya@borosil.com',
+        to_email: allRecipients
+    };
+
+    try {
+        await emailjs.send(
+            emailJsConfig.serviceId,
+            emailJsConfig.templateId,
+            templateParams
+        );
+        console.log(`✅ Ready to Use alert sent to: ${allRecipients}`);
+        return true;
+    } catch (error) {
+        console.error("❌ Error sending Ready to Use alert:", error);
+        return false;
+    }
 };
