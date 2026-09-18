@@ -74,6 +74,53 @@ async function runAlertCheck() {
     return await checkAndTriggerAlerts(alertConfig, emailJsConfig);
 }
 
+// Helper function to reliably parse dates from various formats (Timestamp, String, Date)
+function parseRecordDate(dateVal) {
+    if (!dateVal) return null;
+    if (typeof dateVal === 'string') {
+        if (dateVal.includes('/')) {
+            const parts = dateVal.split('/');
+            if (parts.length === 3) {
+                // DD/MM/YYYY
+                return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+            }
+        }
+        if (dateVal.includes('-')) {
+            const parts = dateVal.split('T')[0].split('-');
+            if (parts.length === 3) {
+                if (parts[0].length === 4) {
+                    // YYYY-MM-DD
+                    return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                }
+                // DD-MM-YYYY
+                return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+            }
+        }
+        const parsed = new Date(dateVal);
+        return isNaN(parsed.getTime()) ? null : parsed;
+    }
+    if (dateVal.toDate && typeof dateVal.toDate === 'function') {
+        return dateVal.toDate();
+    }
+    if (dateVal.seconds) {
+        return new Date(dateVal.seconds * 1000);
+    }
+    if (dateVal instanceof Date) {
+        return dateVal;
+    }
+    return null;
+}
+
+// Helper function to format date consistently as DD/MM/YYYY
+function formatDateDDMMYYYY(dateVal) {
+    const d = parseRecordDate(dateVal);
+    if (!d || isNaN(d.getTime())) return 'N/A';
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+}
+
 // Alert checking logic (adapted from alertService.js)
 async function checkAndTriggerAlerts(config, emailJsConfig) {
     let checked = 0;
@@ -99,116 +146,127 @@ async function checkAndTriggerAlerts(config, emailJsConfig) {
             try {
                 const recordsSnapshot = await db.collection(`rollers/${roller.id}/records`).get();
 
-                const approvedRecords = recordsSnapshot.docs
+                // Get all records sorted descending by date
+                const allRecords = recordsSnapshot.docs
                     .map(doc => ({ id: doc.id, ...doc.data() }))
-                    .filter(record => record.status === 'Approved')
-                    .sort((a, b) => { // Sort descending by date
-                        let dateA, dateB;
-                        if (a.date && typeof a.date === 'string') {
-                            const parts = a.date.split('/');
-                            dateA = new Date(parts[2], parts[1] - 1, parts[0]);
-                        } else if (a.date && a.date.toDate) {
-                            dateA = a.date.toDate();
-                        } else {
-                            dateA = new Date(0);
-                        }
-                        if (b.date && typeof b.date === 'string') {
-                            const parts = b.date.split('/');
-                            dateB = new Date(parts[2], parts[1] - 1, parts[0]);
-                        } else if (b.date && b.date.toDate) {
-                            dateB = b.date.toDate();
-                        } else {
-                            dateB = new Date(0);
-                        }
+                    .sort((a, b) => {
+                        const dateA = parseRecordDate(a.date) || new Date(0);
+                        const dateB = parseRecordDate(b.date) || new Date(0);
                         return dateB - dateA;
                     });
 
-                if (approvedRecords.length === 0) continue;
-                const latestRecord = approvedRecords[0];
-                
-                // Determine Current Status based on Latest Record (Logic matched to Dashboard)
+                if (allRecords.length === 0) continue;
+
+                // Approved records (excluding Roller PDI for status calculation)
+                const approvedRecords = allRecords
+                    .filter(record => record.status === 'Approved' && record.activity !== 'Roller PDI');
+
+                const latestApprovedRecord = approvedRecords.length > 0 ? approvedRecords[0] : null;
+                const latestRecord = allRecords[0];
+
+                // Determine Current Status based on Latest Record
                 let calculatedStatus = 'No Activity';
-                if (latestRecord.activity === 'Roller Received') {
-                    const allKeys = Object.keys(latestRecord);
-                    const readyToUseKey = allKeys.find(key => key.toLowerCase().startsWith('ready_to_use'));
-                    const readyValue = readyToUseKey ? latestRecord[readyToUseKey] : undefined;
-                    calculatedStatus = readyValue === 'Yes' ? 'Ready to Use' : 'To be sent';
-                } else if (latestRecord.activity === 'Production Start') {
-                    calculatedStatus = 'Running';
-                } else if (latestRecord.activity === 'Production End') {
-                    calculatedStatus = 'To be sent'; // Maps to 'To be sent'
-                } else if (latestRecord.activity === 'Roller sent') {
-                    calculatedStatus = 'Sent to Vendor'; // Maps to 'Sent to Vendor'
+                const statusSourceRecord = latestApprovedRecord || latestRecord;
+                if (statusSourceRecord) {
+                    if (statusSourceRecord.activity === 'Roller Received') {
+                        const allKeys = Object.keys(statusSourceRecord);
+                        const readyToUseKey = allKeys.find(key => key.toLowerCase().startsWith('ready_to_use'));
+                        const readyValue = readyToUseKey ? statusSourceRecord[readyToUseKey] : undefined;
+                        calculatedStatus = readyValue === 'Yes' ? 'Ready to Use' : 'To be sent';
+                    } else if (statusSourceRecord.activity === 'Production Start') {
+                        calculatedStatus = 'Running';
+                    } else if (statusSourceRecord.activity === 'Production End') {
+                        calculatedStatus = 'To be sent';
+                    } else if (statusSourceRecord.activity === 'Roller sent') {
+                        calculatedStatus = 'Sent to Vendor';
+                    } else if (statusSourceRecord.activity === 'Scrap') {
+                        calculatedStatus = 'Scrap';
+                    }
                 }
 
+                // Support both database currentStatus ('To be sent' / 'Sent to Vendor') and fallback calculatedStatus
+                const currentOrCalcStatus = roller.currentStatus || calculatedStatus;
+
                 // --- Feature: Ready to Use Counter ---
-                if (calculatedStatus === 'Ready to Use') {
+                if (currentOrCalcStatus === 'Ready to Use') {
                     let lineKey = roller.line;
                     if (lineKey === 'SG#3.1' || lineKey === 'SG#3.2') {
                         lineKey = 'SG#3';
                     }
                     
-                    // Normalize Top/Bottom case just in case
-                    const positionKey = roller.position; // Assuming "Top" or "Bottom"
-
+                    const positionKey = roller.position;
                     if (readyToUseCounts[lineKey] && (positionKey === 'Top' || positionKey === 'Bottom')) {
                         readyToUseCounts[lineKey][positionKey]++;
                     }
                 }
 
-                if (!latestRecord.date) continue;
-
-                // --- Date Parsing for Delays ---
-                let recordDate;
-                if (typeof latestRecord.date === 'string') {
-                    const dateParts = latestRecord.date.split('/');
-                    recordDate = new Date(dateParts[2], dateParts[1] - 1, dateParts[0]);
-                } else if (latestRecord.date.toDate) {
-                    recordDate = latestRecord.date.toDate();
-                } else {
-                    continue;
-                }
-
                 const now = new Date();
-                const diffTime = Math.abs(now - recordDate);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-                // --- Delay Alerts Logic ---
-                // Support both database currentStatus ('To be sent' / 'Sent to Vendor') and legacy names
-                const currentOrCalcStatus = roller.currentStatus || calculatedStatus;
-
-                // Check Delay in Send (Status: 'To be sent' / 'Production End')
+                // =========================================================================
+                // Alert 1: Delay in sending roller to vendor (Status: 'To be sent' / 'Production End')
+                // =========================================================================
                 const isDelayInSend = (currentOrCalcStatus === 'To be sent' || currentOrCalcStatus === 'Production End');
-                if (
-                    config.productionEndDelay?.enabled &&
-                    isDelayInSend &&
-                    diffDays > config.productionEndDelay.days
-                ) {
-                    const shouldSend = await checkLastAlertDate(roller.id, 'To be sent');
-                    if (shouldSend) {
-                        delayedSendRollers.push({ ...roller, diffDays, recordDate });
+                if (config.productionEndDelay?.enabled && isDelayInSend) {
+                    // Check allRecords (both Approved and Pending) to find the relevant Production End record.
+                    // This prevents falling back to an old Production Start date if Production End is pending approval.
+                    const prodEndRecord = allRecords.find(r => r.activity === 'Production End') ||
+                        allRecords.find(r => r.activity === 'Roller Received' && (r.ready_to_use === 'No' || r.readyToUse === 'No')) ||
+                        latestApprovedRecord ||
+                        latestRecord;
+
+                    const recordDate = parseRecordDate(prodEndRecord?.date);
+
+                    if (recordDate) {
+                        const diffTime = now.getTime() - recordDate.getTime();
+                        // Only count elapsed days if date is in the past
+                        const diffDays = diffTime > 0 ? Math.floor(diffTime / (1000 * 60 * 60 * 24)) : 0;
+
+                        if (diffDays > config.productionEndDelay.days) {
+                            const shouldSend = await checkLastAlertDate(roller.id, 'To be sent');
+                            if (shouldSend) {
+                                const statusLabel = prodEndRecord.status === 'Pending'
+                                    ? `${currentOrCalcStatus} (Pending Approval)`
+                                    : currentOrCalcStatus;
+                                delayedSendRollers.push({ ...roller, currentStatus: statusLabel, diffDays, recordDate });
+                            }
+                        }
                     }
                 }
 
-                // Check Delay in Receive (Status: 'Sent to Vendor' / 'Roller sent')
+                // =========================================================================
+                // Alert 2: Delay in receiving roller from vendor (Status: 'Sent to Vendor' / 'Roller sent')
+                // =========================================================================
                 const isDelayInReceive = (currentOrCalcStatus === 'Sent to Vendor' || currentOrCalcStatus === 'Roller sent');
-                if (
-                    config.rollerSentDelay?.enabled &&
-                    isDelayInReceive &&
-                    diffDays > config.rollerSentDelay.days
-                ) {
-                    const shouldSend = await checkLastAlertDate(roller.id, 'Sent to Vendor');
-                    if (shouldSend) {
-                        // Extract Vendor Name from latest record
-                        const allKeys = Object.keys(latestRecord);
-                        const vendorKey = allKeys.find(key => 
-                            key.toLowerCase().includes('vendor') || 
-                            key.toLowerCase().includes('supplier') ||
-                            key.toLowerCase().includes('party')
-                        );
-                        const vendorName = vendorKey && latestRecord[vendorKey] ? String(latestRecord[vendorKey]).trim() : '-';
-                        
-                        delayedReceiveRollers.push({ ...roller, diffDays, recordDate, vendorName });
+                if (config.rollerSentDelay?.enabled && isDelayInReceive) {
+                    // Check allRecords (both Approved and Pending) to find the relevant Roller sent record
+                    const sentRecord = allRecords.find(r => r.activity === 'Roller sent') ||
+                        latestApprovedRecord ||
+                        latestRecord;
+
+                    const recordDate = parseRecordDate(sentRecord?.date);
+
+                    if (recordDate) {
+                        const diffTime = now.getTime() - recordDate.getTime();
+                        const diffDays = diffTime > 0 ? Math.floor(diffTime / (1000 * 60 * 60 * 24)) : 0;
+
+                        if (diffDays > config.rollerSentDelay.days) {
+                            const shouldSend = await checkLastAlertDate(roller.id, 'Sent to Vendor');
+                            if (shouldSend) {
+                                // Extract Vendor Name from the sent record
+                                const allKeys = Object.keys(sentRecord || {});
+                                const vendorKey = allKeys.find(key => 
+                                    key.toLowerCase().includes('vendor') || 
+                                    key.toLowerCase().includes('supplier') ||
+                                    key.toLowerCase().includes('party')
+                                );
+                                const vendorName = vendorKey && sentRecord[vendorKey] ? String(sentRecord[vendorKey]).trim() : '-';
+                                
+                                const statusLabel = sentRecord.status === 'Pending'
+                                    ? `${currentOrCalcStatus} (Pending Approval)`
+                                    : currentOrCalcStatus;
+                                delayedReceiveRollers.push({ ...roller, currentStatus: statusLabel, diffDays, recordDate, vendorName });
+                            }
+                        }
                     }
                 }
             } catch (error) {
@@ -331,7 +389,7 @@ function generateBulkEmailHtml(rollers, alertType) {
     const isReceiveDelay = alertType === "Delayed in receive roller from vendor";
 
     const rowRows = rollers.map(roller => {
-        const date = roller.recordDate ? roller.recordDate.toLocaleDateString() : 'N/A';
+        const date = formatDateDDMMYYYY(roller.recordDate);
         return `
         <tr style="border-bottom: 1px solid #eee;">
             <td style="padding: 10px; border: 1px solid #ddd;">${roller.rollerNumber || 'N/A'}</td>
