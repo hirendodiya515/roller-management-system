@@ -216,10 +216,12 @@ async function checkAndTriggerAlerts(config, emailJsConfig) {
                 if (config.productionEndDelay?.enabled && isDelayInSend) {
                     // Check allRecords (both Approved and Pending) to find the relevant Production End record.
                     // This prevents falling back to an old Production Start date if Production End is pending approval.
-                    const prodEndRecord = allRecords.find(r => r.activity === 'Production End') ||
-                        allRecords.find(r => r.activity === 'Roller Received' && (r.ready_to_use === 'No' || r.readyToUse === 'No')) ||
-                        latestApprovedRecord ||
-                        latestRecord;
+                    const prodEndRecord = allRecords.find(r => 
+                        r.activity === 'Production End' || 
+                        (r.activity === 'Roller Received' && (r.ready_to_use === 'No' || r.readyToUse === 'No'))
+                    ) ||
+                    latestApprovedRecord ||
+                    latestRecord;
 
                     const recordDate = parseRecordDate(prodEndRecord?.date);
 
