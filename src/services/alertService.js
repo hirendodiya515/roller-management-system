@@ -96,6 +96,11 @@ export const checkAndTriggerAlerts = async (config, emailJsConfig) => {
         emailjs.init(emailJsConfig.publicKey);
 
         for (const roller of rollers) {
+            // Skip rollers where mail alerts are disabled (e.g. inactive pattern rollers)
+            if (roller.mailAlertsEnabled === false) {
+                continue;
+            }
+
             try {
                 const recordsSnapshot = await getDocs(
                     collection(db, `rollers/${roller.id}/records`)

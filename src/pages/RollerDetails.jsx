@@ -31,6 +31,7 @@ import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import FactCheckIcon from '@mui/icons-material/FactCheck';
 import AssignmentIcon from '@mui/icons-material/Assignment';
+import NotificationsOffIcon from '@mui/icons-material/NotificationsOff';
 import { doc, getDoc, collection, onSnapshot, query, orderBy, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
@@ -261,9 +262,23 @@ export default function RollerDetails() {
               border: '1px solid #e0e0e0'
             }}
           >
-            <Typography variant="h4" fontWeight="bold" color="primary.main" sx={{ mb: 0.5 }}>
-              #{roller.rollerNumber}
-            </Typography>
+            <Box display="flex" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
+              <Typography variant="h4" fontWeight="bold" color="primary.main">
+                #{roller.rollerNumber}
+              </Typography>
+              {roller.mailAlertsEnabled === false && (
+                <Tooltip title={`Mail Alerts Disabled: ${roller.alertDisableReason || 'No reason specified'}`} arrow>
+                  <Chip
+                    icon={<NotificationsOffIcon style={{ fontSize: 16 }} />}
+                    label="Alerts Off"
+                    size="small"
+                    color="warning"
+                    variant="outlined"
+                    sx={{ height: 24, fontSize: '0.75rem', fontWeight: 600 }}
+                  />
+                </Tooltip>
+              )}
+            </Box>
             <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
               {roller.make} • {roller.line} - {roller.position}
             </Typography>

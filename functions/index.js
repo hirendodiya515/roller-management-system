@@ -139,10 +139,17 @@ async function checkAndTriggerAlerts(config, emailJsConfig) {
 
     try {
         const rollersSnapshot = await db.collection('rollers').get();
-        const rollers = rollersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const rollers = rollersSnapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter(r => !r.isDeleted);
         checked = rollers.length;
 
         for (const roller of rollers) {
+            // Skip rollers where mail alerts are disabled (e.g. inactive pattern rollers)
+            if (roller.mailAlertsEnabled === false) {
+                continue;
+            }
+
             try {
                 const recordsSnapshot = await db.collection(`rollers/${roller.id}/records`).get();
 

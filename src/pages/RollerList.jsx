@@ -28,6 +28,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ClearIcon from '@mui/icons-material/Clear';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import NotificationsOffIcon from '@mui/icons-material/NotificationsOff';
 
 import { collection, onSnapshot, query, orderBy, doc, updateDoc, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -397,10 +398,22 @@ export default function RollerList() {
                 />
 
                 <CardContent>
-                  <Box display="flex" alignItems="center" mb={1}>
+                  <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
                     <Typography variant="h6" fontWeight="bold" color="primary">
                       #{roller.rollerNumber}
                     </Typography>
+                    {roller.mailAlertsEnabled === false && (
+                      <Tooltip title={`Mail Alerts Disabled: ${roller.alertDisableReason || 'No reason specified'}`} arrow>
+                        <Chip
+                          icon={<NotificationsOffIcon style={{ fontSize: 14 }} />}
+                          label="Alerts Off"
+                          size="small"
+                          color="warning"
+                          variant="outlined"
+                          sx={{ height: 22, fontSize: '0.72rem', fontWeight: 600 }}
+                        />
+                      </Tooltip>
+                    )}
                   </Box>
 
                   <Box display="flex" flexDirection="column" gap={0.5}>
